@@ -25,6 +25,11 @@ use acdhOeaw\fedora\Fedora;
  */
 class Doorkeeper {
 
+    static private $exclResources = array(
+        'fcr:backup',
+        'fcr:restore'
+    );
+
     static public function initDb(PDO $pdo) {
         $pdo->query("CREATE TABLE transactions (transaction_id varchar(255) primary key, created timestamp not null)");
 
@@ -81,6 +86,10 @@ class Doorkeeper {
             }
             $this->resourceId = $tmp;
             $this->proxyUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . $this->resourceId;
+
+            if (in_array($this->resourceId, self::$exclResources)) {
+                $this->pass = true;
+            }
         }
 
     }
