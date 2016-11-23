@@ -1,13 +1,18 @@
 <?php
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 use zozlak\util\ClassLoader;
 use acdhOeaw\doorkeeper\Doorkeeper;
 
-$cl = new ClassLoader('../src');
+$cl = new ClassLoader();
 
-$pdo = new PDO('sqlite:db.sqlite');
+$dbFile = 'db.sqlite';
+$initDb = !file_exists($dbFile);
+$pdo = new PDO('sqlite:' . $dbFile);
+if($initDb){
+    Doorkeeper::initDb($pdo);
+}
 $doorkeeper = new Doorkeeper('/rest/', 'http://fedora.localhost/rest/', $pdo);
 
 // najważniejszy sposród handlerów

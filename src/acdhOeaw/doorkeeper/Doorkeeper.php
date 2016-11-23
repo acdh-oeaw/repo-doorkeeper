@@ -21,6 +21,18 @@ use acdhOeaw\doorkeeper\Proxy;
  */
 class Doorkeeper {
 
+    static public function initDb(PDO $pdo) {
+        $pdo->query("CREATE TABLE transactions (transaction_id varchar(255) primary key, created date not null)");
+
+        $pdo->query("
+            CREATE TABLE resources (
+                transaction_id varchar(255) references transactions (transaction_id) on delete cascade, 
+                resource_id varchar(255), 
+                primary key (transaction_id, resource_id)
+            )
+        ");
+    }
+
     private $baseUrl;
     private $proxyBaseUrl;
     private $transactionId;
