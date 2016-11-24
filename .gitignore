@@ -1,4 +1,6 @@
 /nbproject
 /vendor
 /composer.lock
+/config.ini
+/*.sparql
 *.sqlite

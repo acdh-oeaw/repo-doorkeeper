@@ -11,8 +11,12 @@ namespace acdhOeaw\doorkeeper;
 use PDO;
 use Exception;
 use LogicException;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use zozlak\util\Config;
 use acdhOeaw\doorkeeper\Proxy;
+use acdhOeaw\fedora\Fedora;
 
 /**
  * Description of Doorkeeper
@@ -22,7 +26,7 @@ use acdhOeaw\doorkeeper\Proxy;
 class Doorkeeper {
 
     static public function initDb(PDO $pdo) {
-        $pdo->query("CREATE TABLE transactions (transaction_id varchar(255) primary key, created date not null)");
+        $pdo->query("CREATE TABLE transactions (transaction_id varchar(255) primary key, created timestamp not null)");
 
         $pdo->query("
             CREATE TABLE resources (
@@ -33,29 +37,40 @@ class Doorkeeper {
         ");
     }
 
+    static public function getAuthHeader() {
+        if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
+            return 'Basic ' . base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
+        }
+        return null;
+    }
+
     private $baseUrl;
     private $proxyBaseUrl;
     private $transactionId;
     private $resourceId;
     private $method;
     private $pdo;
+    private $fedora;
     private $proxy;
     private $commitHandlers = array();
     private $postCreateHandlers = array();
     private $postEditHandlers = array();
 
-    public function __construct(string $baseUrl, string $proxyBaseUrl, PDO $pdo) {
+    public function __construct(Config $cfg, PDO $pdo) {
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
-        $this->proxy = new Proxy();
-
+        $this->proxy = new Proxy($cfg->get('fedoraHost'));
+        $this->fedora = new Fedora($cfg);
         $this->pdo = $pdo;
-        $this->baseUrl = preg_replace('|/$|', '', $baseUrl) . '/';
-        $this->proxyBaseUrl = preg_replace('|/$|', '', $proxyBaseUrl) . '/';
 
-        $tmp = mb_substr(filter_input(INPUT_SERVER, 'REQUEST_URI'), strlen($baseUrl));
+        $this->baseUrl = preg_replace('|/$|', '', $cfg->get('doorkeeperBaseUrl')) . '/';
+        $this->proxyBaseUrl = preg_replace('|/$|', '', $cfg->get('fedoraApiUrl')) . '/';
+
+        $tmp = mb_substr(filter_input(INPUT_SERVER, 'REQUEST_URI'), strlen($this->baseUrl));
         if (preg_match('|^tx:[-a-z0-9]+|', $tmp)) {
             $this->transactionId = preg_replace('|/.*$|', '', $tmp) . '/';
             $tmp = substr($tmp, strlen($this->transactionId));
+
+            $this->fedora->setTransactionId(substr($this->proxyBaseUrl . $this->transactionId, 0, -1));
         }
         $this->resourceId = $tmp;
 
@@ -111,18 +126,18 @@ class Doorkeeper {
     }
 
     private function handleResourceEdit() {
-        $query = $this->pdo->prepare("INSERT INTO resources (session_id, resource) VALUES (?, ?)");
+        $query = $this->pdo->prepare("INSERT INTO resources (transaction_id, resource_id) VALUES (?, ?)");
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
             if ($this->method === 'POST') {
                 $location = $this->parseLocations($response);
                 $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $location);
-                $this->e($resourceId);
                 $query->execute(array($this->transactionId, $resourceId));
 
                 foreach ($this->postCreateHandlers as $i) {
                     try {
-                        $i($resourceId, $this);
+                        $res = $this->fedora->getResourceByUri($this->resourceId);
+                        $i($res, $this);
                     } catch (Exception $e) {
                         
                     }
@@ -132,7 +147,8 @@ class Doorkeeper {
 
                 foreach ($this->postEditHandlers as $i) {
                     try {
-                        $i($this->resourceId, $this);
+                        $res = $this->fedora->getResourceByUri($this->resourceId);
+                        $i($res, $this);
                     } catch (Exception $e) {
                         
                     }
@@ -148,12 +164,12 @@ class Doorkeeper {
     private function handleTransactionEnd() {
         $errors = array();
         if ($this->resourceId === 'fcr:tx/fcr:commit') {
-            // COMMIT - check resources integrity
-            $query = $this->pdo->prepare("SELECT resource FROM resources WHERE session_id = ?");
+// COMMIT - check resources integrity
+            $query = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
             $query->execute(array($this->transactionId));
             $resources = array();
             while ($i = $query->fetch(PDO::FETCH_OBJ)) {
-                $resources[] = $this->proxyUrl . $this->transactionId . $i->resource;
+                $resources[] = $this->fedora->getResourceByUri($i->resource_id);
             }
             foreach ($this->commitHandlers as $i) {
                 try {
@@ -164,7 +180,11 @@ class Doorkeeper {
             }
             if (count($errors) > 0) {
                 $rollbackUrl = $this->proxyBaseUrl . $this->transactionId . 'fcr:tx/fcr:rollback';
-                $this->proxy->proxy($rollbackUrl, true);
+                try {
+                    $this->sendRequest('POST', $rollbackUrl);
+                } catch (Exception $e) {
+                    
+                }
                 header('HTTP/1.1 400 Bad Request - doorkeeper checks failed');
                 foreach ($errors as $i) {
                     echo $i->getMessage() . "\n\n";
@@ -172,19 +192,25 @@ class Doorkeeper {
             }
         }
 
-        // COMIT / ROLLBACK
-        $query = $this->pdo->prepare("DELETE FROM resources WHERE session_id = ?");
+// COMIT / ROLLBACK
+        $query = $this->pdo->prepare("DELETE FROM resources WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
-        $query = $this->pdo->prepare("DELETE FROM sessions WHERE session_id = ?");
+        $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
 
         if (count($errors) == 0) {
-            $this->proxy->proxy($this->proxyUrl);
+            try {
+                $this->proxy->proxy($this->proxyUrl);
+            } catch (RequestException $e) {
+                
+            } catch (Exception $e) {
+                
+            }
         }
     }
 
     private function handleTransactionBegin() {
-        // pass request, check if it was successfull and if so, save the transaction id in the database
+// pass request, check if it was successfull and if so, save the transaction id in the database
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
 
@@ -192,7 +218,7 @@ class Doorkeeper {
             $transactionId = preg_replace('|^.*/([^/]+)|', '\\1', $location) . '/';
 
             if ($response->getStatusCode() === 201 && $transactionId !== $location . '/') {
-                $query = $this->pdo->prepare("INSERT INTO sessions VALUES (?)");
+                $query = $this->pdo->prepare("INSERT INTO transactions VALUES (?, current_timestamp)");
                 $query->execute(array($transactionId));
             }
         } catch (RequestException $e) {
@@ -208,10 +234,10 @@ class Doorkeeper {
             return false;
         }
 
-        $query = $this->pdo->prepare("SELECT count(*) FROM sessions WHERE session_id = ?");
+        $query = $this->pdo->prepare("SELECT count(*) FROM transactions WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
         if ((int) $query->fetchColumn() !== 1) {
-            header('HTTP/1.1 400 Bad Request - unknown transaction id');
+            header('HTTP/1.1 400 Bad Request - unknown transaction id ' . $this->transactionId);
             return false;
         }
 
@@ -243,6 +269,13 @@ class Doorkeeper {
         $f = fopen('php://stdout', 'w');
         fwrite($f, $str);
         fclose($f);
+    }
+
+    private function sendRequest($method, $url, $headers = array(), $body = null): Response {
+        $headers['Authorization'] = self::getAuthHeader();
+        $request = new Request('POST', $url, $headers, $body);
+        $client = new Client();
+        return $client->send($request);
     }
 
 }

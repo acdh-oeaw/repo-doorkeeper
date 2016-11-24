@@ -19,15 +19,19 @@ use GuzzleHttp\Psr7\Request;
  */
 class Proxy {
 
-    public function proxy($url, $skipResponse = false): Response {
+    private $host;
+
+    public function __construct(string $host) {
+        $this->host = $host;
+    }
+
+    public function proxy($url): Response {
         $options = array();
-        if (!$skipResponse) {
-            $output = fopen('php://output', 'w');
-            $options['sink'] = $output;
-            $options['on_headers'] = function(Response $r) {
-                $this->handleHeaders($r);
-            };
-        }
+        $output = fopen('php://output', 'w');
+        $options['sink'] = $output;
+        $options['on_headers'] = function(Response $r) {
+            $this->handleHeaders($r);
+        };
         $client = new Client($options);
 
         $authHeader = null;
@@ -37,7 +41,8 @@ class Proxy {
         $headers = array(
             'Authorization' => $authHeader,
             'Accept' => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
-            'Content-Type' => filter_input(INPUT_SERVER, 'HTTP_CONTENT_TYPE')
+            'Content-Type' => filter_input(INPUT_SERVER, 'HTTP_CONTENT_TYPE'),
+            'Host' => $this->host
         );
 
         $method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
@@ -46,16 +51,20 @@ class Proxy {
         $response = $client->send($request);
 
         fclose($input);
-        if (isset($output)) {
-            fclose($output);
-        }
+        fclose($output);
 
         return $response;
     }
 
     public function handleHeaders(Response $response) {
+        //@TODO for sure this list should be longer!
+        static $skipHeaders = array('transfer-encoding', 'host');
+
         header('HTTP/1.1 ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
         foreach ($response->getHeaders() as $name => $values) {
+            if (in_array(strtolower($name), $skipHeaders)) {
+                continue;
+            }
             foreach ($values as $value) {
                 header(sprintf('%s: %s', $name, $value), false);
             }
