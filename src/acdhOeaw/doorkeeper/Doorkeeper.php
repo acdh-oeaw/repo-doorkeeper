@@ -52,6 +52,7 @@ class Doorkeeper {
     private $pdo;
     private $fedora;
     private $proxy;
+    private $pass = false;
     private $commitHandlers = array();
     private $postCreateHandlers = array();
     private $postEditHandlers = array();
@@ -63,18 +64,25 @@ class Doorkeeper {
         $this->pdo = $pdo;
 
         $this->baseUrl = preg_replace('|/$|', '', $cfg->get('doorkeeperBaseUrl')) . '/';
-        $this->proxyBaseUrl = preg_replace('|/$|', '', $cfg->get('fedoraApiUrl')) . '/';
+        $this->proxyBaseUrl = preg_replace('|/$|', '', $cfg->get('fedoraBaseUrl')) . '/';
 
-        $tmp = mb_substr(filter_input(INPUT_SERVER, 'REQUEST_URI'), strlen($this->baseUrl));
-        if (preg_match('|^tx:[-a-z0-9]+|', $tmp)) {
-            $this->transactionId = preg_replace('|/.*$|', '', $tmp) . '/';
-            $tmp = substr($tmp, strlen($this->transactionId));
+        $reqUri = filter_input(INPUT_SERVER, 'REQUEST_URI');
+        if (!preg_match('|^' . $this->baseUrl . '|', $reqUri)) {
+            // request outside Fedora API
+            $this->proxyUrl = $this->proxyBaseUrl . substr($reqUri, 1);
+            $pass = true;
+        } else {
+            $tmp = mb_substr($reqUri, strlen($this->baseUrl));
+            if (preg_match('|^tx:[-a-z0-9]+|', $tmp)) {
+                $this->transactionId = preg_replace('|/.*$|', '', $tmp) . '/';
+                $tmp = substr($tmp, strlen($this->transactionId));
 
-            $this->fedora->setTransactionId(substr($this->proxyBaseUrl . $this->transactionId, 0, -1));
+                $this->fedora->setTransactionId(substr($this->proxyBaseUrl . 'rest/' . $this->transactionId, 0, -1));
+            }
+            $this->resourceId = $tmp;
+            $this->proxyUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . $this->resourceId;
         }
-        $this->resourceId = $tmp;
 
-        $this->proxyUrl = $this->proxyBaseUrl . $this->transactionId . $this->resourceId;
     }
 
     public function getProxyBaseUrl() {
@@ -98,7 +106,7 @@ class Doorkeeper {
     }
 
     public function handleRequest() {
-        if ($this->isMethodReadOnly()) {
+        if ($this->isMethodReadOnly() || $this->pass) {
             $this->handleReadOnly();
         } else if ($this->resourceId === 'fcr:tx' && $this->method === 'POST') {
             $this->handleTransactionBegin();
@@ -164,7 +172,7 @@ class Doorkeeper {
     private function handleTransactionEnd() {
         $errors = array();
         if ($this->resourceId === 'fcr:tx/fcr:commit') {
-// COMMIT - check resources integrity
+            // COMMIT - check resources integrity
             $query = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
             $query->execute(array($this->transactionId));
             $resources = array();
@@ -179,7 +187,7 @@ class Doorkeeper {
                 }
             }
             if (count($errors) > 0) {
-                $rollbackUrl = $this->proxyBaseUrl . $this->transactionId . 'fcr:tx/fcr:rollback';
+                $rollbackUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . 'fcr:tx/fcr:rollback';
                 try {
                     $this->sendRequest('POST', $rollbackUrl);
                 } catch (Exception $e) {
@@ -192,7 +200,7 @@ class Doorkeeper {
             }
         }
 
-// COMIT / ROLLBACK
+        // COMIT / ROLLBACK
         $query = $this->pdo->prepare("DELETE FROM resources WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
         $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
