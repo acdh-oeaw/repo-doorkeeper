@@ -49,6 +49,7 @@ class Doorkeeper {
         return null;
     }
 
+    private $cfg;
     private $baseUrl;
     private $proxyBaseUrl;
     private $transactionId;
@@ -67,6 +68,7 @@ class Doorkeeper {
         $this->proxy = new Proxy($cfg->get('fedoraHost'));
         $this->fedora = new Fedora($cfg);
         $this->pdo = $pdo;
+        $this->cfg = $cfg;
 
         $this->baseUrl = preg_replace('|/$|', '', $cfg->get('doorkeeperBaseUrl')) . '/';
         $this->proxyBaseUrl = preg_replace('|/$|', '', $cfg->get('fedoraBaseUrl')) . '/';
@@ -75,7 +77,7 @@ class Doorkeeper {
         if (!preg_match('|^' . $this->baseUrl . '|', $reqUri)) {
             // request outside Fedora API
             $this->proxyUrl = $this->proxyBaseUrl . substr($reqUri, 1);
-            $pass = true;
+            $this->pass = true;
         } else {
             $tmp = mb_substr($reqUri, strlen($this->baseUrl));
             if (preg_match('|^tx:[-a-z0-9]+|', $tmp)) {
@@ -94,6 +96,10 @@ class Doorkeeper {
 
     }
 
+    public function getConfig($prop){
+        return $this->config->get($prop);
+    }
+    
     public function getProxyBaseUrl() {
         return $this->proxyBaseUrl;
     }
@@ -258,7 +264,7 @@ class Doorkeeper {
             return false;
         }
 
-        if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT', 'PATCH'))) {
+        if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'))) {
             header('HTTP/1.1 405 Method Not Supported by the doorkeeper');
             return false;
         }
