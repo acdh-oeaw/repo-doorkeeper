@@ -5,6 +5,7 @@ fedoraLocProp="https://vocabs.acdh.oeaw.ac.at/#locationpath"
 fedoraSizeProp="http://purl.org/dc/terms/extent"
 
 fedoraBaseUrl="http://fedora.localhost"
+fedoraApiUrl="http://fedora.localhost/rest"
 fedoraUser="admin"
 fedoraPswd="admin"
 fedoraHost="fedora.localhost"

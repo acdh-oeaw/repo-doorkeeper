@@ -4,6 +4,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use zozlak\util\Config;
 use zozlak\util\ClassLoader;
+use zozlak\util\UUID;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
 
@@ -36,6 +37,16 @@ $doorkeeper->registerCommitHandler(function(array $modResources, Doorkeeper $d) 
 // to dbanie o istnienie właściwości dct:identifier
 $doorkeeper->registerPostCreateHandler(function(FedoraResource $res, Doorkeeper $d) {
     $d->e('post create handler for ' . $res->getUri() . "\n");
+
+    // UUIDs generation
+    /*$metadata = $res->getMetadata();
+    if (!$metadata->hasProperty(EasyRdfUtil::fixPropName($this->idProp))) {
+        $graph = new EasyRdf_Graph();
+        $metadata = $graph->resource($res->getUri());
+        $metadata->addResource($d->getConfig('fedoraIdProp'), $d->getConfig('fedoraIdNamespace') . UUID::v4());
+        $res->setMetadata($metadata);
+        $res->updateMetadata('ADD');
+    }*/
 });
 // nie ma sensu rzucanie błędami w postEdit handlerze, bo i tak nie ma jak wycofać takiej zmiany
 // (chyba że razem z całą transakcją, ale to sprawdza commitHandler)

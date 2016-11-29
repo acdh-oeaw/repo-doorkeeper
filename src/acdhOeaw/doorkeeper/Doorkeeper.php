@@ -25,6 +25,11 @@ use acdhOeaw\fedora\Fedora;
  */
 class Doorkeeper {
 
+    static private $exclResources = array(
+        'fcr:backup',
+        'fcr:restore'
+    );
+
     static public function initDb(PDO $pdo) {
         $pdo->query("CREATE TABLE transactions (transaction_id varchar(255) primary key, created timestamp not null)");
 
@@ -44,6 +49,7 @@ class Doorkeeper {
         return null;
     }
 
+    private $cfg;
     private $baseUrl;
     private $proxyBaseUrl;
     private $transactionId;
@@ -62,6 +68,7 @@ class Doorkeeper {
         $this->proxy = new Proxy($cfg->get('fedoraHost'));
         $this->fedora = new Fedora($cfg);
         $this->pdo = $pdo;
+        $this->cfg = $cfg;
 
         $this->baseUrl = preg_replace('|/$|', '', $cfg->get('doorkeeperBaseUrl')) . '/';
         $this->proxyBaseUrl = preg_replace('|/$|', '', $cfg->get('fedoraBaseUrl')) . '/';
@@ -70,7 +77,7 @@ class Doorkeeper {
         if (!preg_match('|^' . $this->baseUrl . '|', $reqUri)) {
             // request outside Fedora API
             $this->proxyUrl = $this->proxyBaseUrl . substr($reqUri, 1);
-            $pass = true;
+            $this->pass = true;
         } else {
             $tmp = mb_substr($reqUri, strlen($this->baseUrl));
             if (preg_match('|^tx:[-a-z0-9]+|', $tmp)) {
@@ -81,10 +88,18 @@ class Doorkeeper {
             }
             $this->resourceId = $tmp;
             $this->proxyUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . $this->resourceId;
+
+            if (in_array($this->resourceId, self::$exclResources)) {
+                $this->pass = true;
+            }
         }
 
     }
 
+    public function getConfig($prop){
+        return $this->config->get($prop);
+    }
+    
     public function getProxyBaseUrl() {
         return $this->proxyBaseUrl;
     }
@@ -249,7 +264,7 @@ class Doorkeeper {
             return false;
         }
 
-        if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT', 'PATCH'))) {
+        if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'))) {
             header('HTTP/1.1 405 Method Not Supported by the doorkeeper');
             return false;
         }
