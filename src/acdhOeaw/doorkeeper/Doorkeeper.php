@@ -94,6 +94,11 @@ class Doorkeeper {
             }
         }
 
+        if ($cfg->get('doorkeeperDefaultUserPswd') && !isset($_SERVER['PHP_AUTH_USER'])) {
+           $credentials = explode(':', $cfg->get('doorkeeperDefaultUserPswd'));
+           $_SERVER['PHP_AUTH_USER'] = $credentials[0];
+           $_SERVER['PHP_AUTH_PW'] = $credentials[1];
+        }
     }
 
     public function getConfig($prop){
