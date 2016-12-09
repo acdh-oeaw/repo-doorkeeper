@@ -97,7 +97,7 @@ class Doorkeeper {
     }
 
     public function getConfig($prop){
-        return $this->config->get($prop);
+        return $this->cfg->get($prop);
     }
     
     public function getProxyBaseUrl() {

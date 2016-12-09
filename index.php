@@ -22,10 +22,12 @@ $doorkeeper = new Doorkeeper($config, $pdo);
 
 // najważniejszy sposród handlerów
 $doorkeeper->registerCommitHandler(function(array $modResources, Doorkeeper $d) {
-    $d->e("transaction commit handler for:\n");
+    $log = fopen($d->getConfig('doorkeeperLogFile'), 'a');
+    fwrite($log, "transaction commit handler for: " . $d->getTransactionId() . "\n");
     foreach ($modResources as $i) {
-        $d->e($i->getUri() . "\n");
+        fwrite($log, '  ' . $i->getUri() . "\n");
     }
+    fclose($log);
 });
 
 // preEdit i preCreate handlery byłyby fajne, ale zaimplementowanie ich jest bez porównania
@@ -36,7 +38,10 @@ $doorkeeper->registerCommitHandler(function(array $modResources, Doorkeeper $d) 
 // to, co na pewno należałoby tu zaimplementować (jak również w postEdit handlerze),
 // to dbanie o istnienie właściwości dct:identifier
 $doorkeeper->registerPostCreateHandler(function(FedoraResource $res, Doorkeeper $d) {
-    $d->e('post create handler for ' . $res->getUri() . "\n");
+    $log = fopen($d->getConfig('doorkeeperLogFile'), 'a');
+    fwrite($log, 'post create handler for: ' . $d->getTransactionId() . "\n");
+    fwrite($log, "  " . $res->getUri() . "\n");
+    fclose($log);
 
     // UUIDs generation
     /*$metadata = $res->getMetadata();
@@ -51,7 +56,10 @@ $doorkeeper->registerPostCreateHandler(function(FedoraResource $res, Doorkeeper 
 // nie ma sensu rzucanie błędami w postEdit handlerze, bo i tak nie ma jak wycofać takiej zmiany
 // (chyba że razem z całą transakcją, ale to sprawdza commitHandler)
 $doorkeeper->registerPostEditHandler(function(FedoraResource $res, Doorkeeper $d) {
-    $d->e('post edit handler for ' . $res->getUri() . "\n");
+    $log = fopen($d->getConfig('doorkeeperLogFile'), 'a');
+    fwrite($log, 'post edit handler for: ' . $d->getTransactionId() . "\n");
+    fwrite($log, "  " . $res->getUri() . "\n");
+    fclose($log);
 });
 
 $doorkeeper->handleRequest();
