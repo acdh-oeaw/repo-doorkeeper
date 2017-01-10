@@ -95,22 +95,26 @@ class Doorkeeper {
         }
 
         if ($cfg->get('doorkeeperDefaultUserPswd') && !isset($_SERVER['PHP_AUTH_USER'])) {
-           $credentials = explode(':', $cfg->get('doorkeeperDefaultUserPswd'));
-           $_SERVER['PHP_AUTH_USER'] = $credentials[0];
-           $_SERVER['PHP_AUTH_PW'] = $credentials[1];
+            $credentials = explode(':', $cfg->get('doorkeeperDefaultUserPswd'));
+            $_SERVER['PHP_AUTH_USER'] = $credentials[0];
+            $_SERVER['PHP_AUTH_PW'] = $credentials[1];
         }
     }
 
-    public function getConfig($prop){
+    public function getConfig($prop) {
         return $this->cfg->get($prop);
     }
-    
+
     public function getProxyBaseUrl() {
         return $this->proxyBaseUrl;
     }
 
     public function getTransactionId() {
         return $this->transactionId;
+    }
+
+    public function getMethod() {
+        return $this->method;
     }
 
     public function registerCommitHandler($handler) {
@@ -154,28 +158,36 @@ class Doorkeeper {
     }
 
     private function handleResourceEdit() {
-        $query = $this->pdo->prepare("INSERT INTO resources (transaction_id, resource_id) VALUES (?, ?)");
+        // so complex to respect primary key when the same resource is modified many times in one transaction
+        $query = $this->pdo->prepare("
+            INSERT INTO resources (transaction_id, resource_id) 
+            SELECT * 
+            FROM (SELECT ? AS a, ? AS b) AS t
+            WHERE NOT EXISTS (SELECT 1 FROM resources WHERE transaction_id = t.a AND resource_id = t.b)
+        ");
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
             if ($this->method === 'POST') {
                 $location = $this->parseLocations($response);
                 $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $location);
+                $resourceId = preg_replace('|/fcr:metadata$|', '', $location);
                 $query->execute(array($this->transactionId, $resourceId));
 
                 foreach ($this->postCreateHandlers as $i) {
                     try {
-                        $res = $this->fedora->getResourceByUri($this->resourceId);
+                        $res = $this->fedora->getResourceByUri($resourceId);
                         $i($res, $this);
                     } catch (Exception $e) {
                         
                     }
                 }
             } else {
-                $query->execute(array($this->transactionId, $this->resourceId));
+                $resourceId = preg_replace('|/fcr:metadata$|', '', $this->resourceId);
+                $query->execute(array($this->transactionId, $resourceId));
 
                 foreach ($this->postEditHandlers as $i) {
                     try {
-                        $res = $this->fedora->getResourceByUri($this->resourceId);
+                        $res = $this->fedora->getResourceByUri($resourceId);
                         $i($res, $this);
                     } catch (Exception $e) {
                         
@@ -238,7 +250,7 @@ class Doorkeeper {
     }
 
     private function handleTransactionBegin() {
-// pass request, check if it was successfull and if so, save the transaction id in the database
+        // pass request, check if it was successfull and if so, save the transaction id in the database
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
 
