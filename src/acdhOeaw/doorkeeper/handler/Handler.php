@@ -31,6 +31,7 @@ use zozlak\util\Config;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\util\EasyRdfUtil;
+use LogicException;
 use acdhOeaw\epicHandle\HandleService;
 
 /**
@@ -59,6 +60,7 @@ class Handler {
         self::log("transaction commit handler for: " . $d->getTransactionId());
         foreach ($modResources as $i) {
             self::log('  ' . $i->getUri());
+            self::checkTitleProp($i, $d);
         }
     }
 
@@ -101,7 +103,8 @@ class Handler {
         self::log('post edit handler for: ' . $d->getMethod() . ' ' . $d->getTransactionId());
         self::log("  " . $res->getUri());
 
-        self::checkIdProp($res, $d);
+        self::checkIdProp($res, $d);        
+        self::checkTitleProp($res, $d);
         self::generatePid($res, $d);
     }
 
@@ -114,17 +117,47 @@ class Handler {
         fwrite(self::$logfile, $msg . "\n");
     }
 
+    static private function checkTitleProp(FedoraResource $res, Doorkeeper $d) {
+        $titleProp = $d->getConfig('fedoraTitleProp');
+        $metadata = $res->getMetadata();
+        $tpArr = array();
+        
+        //property is missing
+        if (!$metadata->allLiterals(EasyRdfUtil::fixPropName($titleProp))) {            
+            self::log("    no title property");
+            throw new \LogicException("fedoraTitleProp is missing!");            
+        }
+        
+        $tpArr = $metadata->allLiterals(EasyRdfUtil::fixPropName($titleProp));
+        // if the user submitted more than one value
+        if(count($tpArr) > 1){
+            self::log("You have more than ONE title!");
+            throw new \LogicException("You have more than ONE fedoraTitleProp!");
+        }else {
+            foreach($tpArr as $v){
+                //if the submitted value was empty
+                if(empty(trim($v))){
+                    self::log("    title property value is missing");
+                    throw new \LogicException("fedoraTitleProp value is missing!");
+                }
+            }
+        }
+    }
+
     static private function checkIdProp(FedoraResource $res, Doorkeeper $d) {
         $prop = $d->getConfig('fedoraIdProp');
         $namespace = $d->getConfig('fedoraIdNamespace');
+        
         $metadata = $res->getMetadata();
         if (!$metadata->hasProperty(EasyRdfUtil::fixPropName($prop))) {
             if ($namespace === null) {
                 return false;
             }
-
+            
             self::log("    no id property - adding");
-            $metadata->addResource($prop, $namespace . UUID::v4());
+            //valtozoban eltartolom az uuid-s cuccot es utana a fedora getresourcesbyid es valuval lekerem a dbbol h vane mar ilyen
+            $metadata->addResource($prop, $namespace . UUID::v4());            
+            
             $res->setMetadata($metadata);
             $res->updateMetadata();
         }
