@@ -231,6 +231,7 @@ class Doorkeeper {
                     // errors in handlers should not interrupt doorkeeper
                 }
             }
+            $this->reportErrors($errors, true);
         }
 
         // COMIT / ROLLBACK
@@ -239,7 +240,15 @@ class Doorkeeper {
         $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
 
-        $this->reportErrors($errors, true);
+        if (count($errors) == 0) {
+            try {
+                $this->proxy->proxy($this->proxyUrl);
+            } catch (RequestException $e) {
+                
+            } catch (Exception $e) {
+                
+            }
+        }
     }
 
     private function handleTransactionBegin() {
