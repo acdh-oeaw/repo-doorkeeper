@@ -31,7 +31,12 @@ class Doorkeeper {
     );
 
     static public function initDb(PDO $pdo) {
-        $pdo->query("CREATE TABLE transactions (transaction_id varchar(255) primary key, created timestamp not null)");
+        $pdo->query("
+            CREATE TABLE transactions (
+                transaction_id varchar(255) primary key, 
+                created timestamp not null
+            )
+        ");
 
         $pdo->query("
             CREATE TABLE resources (
@@ -158,6 +163,7 @@ class Doorkeeper {
     }
 
     private function handleResourceEdit() {
+        $errors = array();
         // so complex to respect primary key when the same resource is modified many times in one transaction
         $query = $this->pdo->prepare("
             INSERT INTO resources (transaction_id, resource_id) 
@@ -177,8 +183,10 @@ class Doorkeeper {
                     try {
                         $res = $this->fedora->getResourceByUri($resourceId);
                         $i($res, $this);
+                    } catch (LogicException $e) {
+                        $errors[] = $e;
                     } catch (Exception $e) {
-                        
+                        // errors in handlers should not interrupt doorkeeper
                     }
                 }
             } else {
@@ -189,16 +197,18 @@ class Doorkeeper {
                     try {
                         $res = $this->fedora->getResourceByUri($resourceId);
                         $i($res, $this);
+                    } catch (LogicException $e) {
+                        $errors[] = $e;
                     } catch (Exception $e) {
-                        
+                        // errors in handlers should not interrupt doorkeeper
                     }
                 }
             }
-        } catch (RequestException $e) {
-            
         } catch (Exception $e) {
-            
+            // this means resource creation/modification went wrong in Fedora and should be reported
+            $errors[] = $e;
         }
+        $this->reportErrors($errors, false);
     }
 
     private function handleTransactionEnd() {
@@ -215,19 +225,10 @@ class Doorkeeper {
                 try {
                     $i($resources, $this);
                 } catch (LogicException $e) {
+                    // Error reported by the handler
                     $errors[] = $e;
-                }
-            }
-            if (count($errors) > 0) {
-                $rollbackUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . 'fcr:tx/fcr:rollback';
-                try {
-                    $this->sendRequest('POST', $rollbackUrl);
                 } catch (Exception $e) {
-                    
-                }
-                header('HTTP/1.1 400 Bad Request - doorkeeper checks failed');
-                foreach ($errors as $i) {
-                    echo $i->getMessage() . "\n\n";
+                    // errors in handlers should not interrupt doorkeeper
                 }
             }
         }
@@ -238,15 +239,7 @@ class Doorkeeper {
         $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
 
-        if (count($errors) == 0) {
-            try {
-                $this->proxy->proxy($this->proxyUrl);
-            } catch (RequestException $e) {
-                
-            } catch (Exception $e) {
-                
-            }
-        }
+        $this->reportErrors($errors, true);
     }
 
     private function handleTransactionBegin() {
@@ -316,6 +309,34 @@ class Doorkeeper {
         $request = new Request('POST', $url, $headers, $body);
         $client = new Client();
         return $client->send($request);
+    }
+
+    /**
+     * Reports errors to the user (if they were found).
+     * 
+     * Optionally rolls back the transaction.
+     * 
+     * @param array $errors an array of errors (empty array if no errors occured)
+     * @param bool $rollback should transaction be rolled back upon errors
+     */
+    private function reportErrors(array $errors, bool $rollback) {
+        if (count($errors) == 0) {
+            return;
+        }
+
+        if ($rollback) {
+            $rollbackUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . 'fcr:tx/fcr:rollback';
+            try {
+                $this->sendRequest('POST', $rollbackUrl);
+            } catch (Exception $e) {
+                
+            }
+        }
+
+        header('HTTP/1.1 400 Bad Request - doorkeeper checks failed');
+        foreach ($errors as $i) {
+            echo $i->getMessage() . "\n\n";
+        }
     }
 
 }
