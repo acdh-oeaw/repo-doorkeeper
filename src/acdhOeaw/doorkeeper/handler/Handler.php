@@ -46,6 +46,15 @@ class Handler {
         self::$logfile = fopen($cfg->get('doorkeeperLogFile'), 'a');
     }
 
+    /**
+     * Checks resources at the end of transaction
+     * 
+     * Any errors found should be reported by throwing a \LogicException.
+     * @param array $modResources array of FedoraResource objects being created
+     *   or modified in this transaction
+     * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
+     * @throws \LogicException
+     */
     static public function checkTransaction(array $modResources, Doorkeeper $d) {
         self::log("transaction commit handler for: " . $d->getTransactionId());
         foreach ($modResources as $i) {
@@ -54,10 +63,17 @@ class Handler {
     }
 
     /**
-     * preEdit i preCreate handlery byłyby fajne, ale zaimplementowanie ich jest bez porównania
-     * trudniejsze i na razie po prostu ich nie będzie
-     * jakkolwiek rzucanie błędami w postCreate handlerze mogłoby mieć sens (i powodować usunięcie zasobu),
-     * to nie jest zaimplementowane, więc w tej chwili nie ma co niczym rzucać
+     * Checks a resource after creation
+     * 
+     * Be aware that binary resources have almost no metadata upon creation
+     * (their metadata are provided in a separate request being resource
+     * modyfication not creation) so most checks must be postponed.
+     * 
+     * Any errors found should be reported by throwing a \LogicException.
+     * @param \acdhOeaw\doorkeeper\FedoraResource $res created resource
+     * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
+     * @throws \LogicException
+     * @see checkEdit()
      */
     static public function checkCreate(FedoraResource $res, Doorkeeper $d) {
         self::log('post create handler for: ' . $d->getTransactionId());
@@ -68,8 +84,18 @@ class Handler {
     }
 
     /**
-     *  nie ma sensu rzucanie błędami w postEdit handlerze, bo i tak nie ma jak wycofać takiej zmiany
-     *  (chyba że razem z całą transakcją, ale to sprawdza commitHandler)
+     * Checks resource after modification.
+     * 
+     * Be aware that even setting resource metadata upon creation is in fact
+     * a resource modification.
+     * 
+     * It should be considered a bad practice to check relationships between
+     * resources here. Implement them as transaction end checks instead.
+     * 
+     * Any errors found should be reported by throwing a \LogicException.
+     * @param \acdhOeaw\doorkeeper\FedoraResource $res created resource
+     * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
+     * @throws \LogicException
      */
     static public function checkEdit(FedoraResource $res, Doorkeeper $d) {
         self::log('post edit handler for: ' . $d->getMethod() . ' ' . $d->getTransactionId());
@@ -79,6 +105,11 @@ class Handler {
         self::generatePid($res, $d);
     }
 
+    /**
+     * Writes a message to the doorkeeper log.
+     * 
+     * @param type $msg message to write
+     */
     static private function log($msg) {
         fwrite(self::$logfile, $msg . "\n");
     }
