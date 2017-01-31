@@ -63,6 +63,7 @@ class Handler {
             self::log('  ' . $i->getUri());
             self::checkIdProp($i, $d);
             self::checkTitleProp($i, $d);
+            self::checkRelProp($i, $d);
         }
     }
 
@@ -105,10 +106,10 @@ class Handler {
         self::log("  " . $res->getUri());
         
         self::checkIdProp($res, $d);
-        self::checkTitleProp($res, $d);
+        self::checkTitleProp($res, $d);        
         self::generatePid($res, $d);
     }
-
+    
     /**
      * Writes a message to the doorkeeper log.
      * 
@@ -158,6 +159,21 @@ class Handler {
         $sparql = new \EasyRdf_Sparql_Client($d->getConfig('sparqlUrl'));
         //check the generated uuid in the database        
         $query = sprintf('SELECT ?uri WHERE { ?uri %s %s } ', EasyRdfUtil::escapeUri($prop), EasyRdfUtil::escapeUri($nsId));           
+        $result = $sparql->query($query);
+        
+        return $result;
+    }
+    
+    static private function checkIExistingVal(string $prop, string $value, Doorkeeper $d){
+        
+        if($d->getConfig('sparqlUrl') === null){
+            self::log("    no sparqlUrl");
+            throw new \LogicException("sparqlUrl is missing or empty!");
+        }
+        
+        $sparql = new \EasyRdf_Sparql_Client($d->getConfig('sparqlUrl'));
+        //check the generated uuid in the database        
+        $query = sprintf('SELECT ?uri WHERE { ?uri %s %s } ', EasyRdfUtil::escapeUri($prop), EasyRdfUtil::escapeUri($value));           
         $result = $sparql->query($query);
         
         return $result;
@@ -249,4 +265,42 @@ class Handler {
             $res->updateMetadata();
         }
     }
+    
+    static private function checkRelProp(FedoraResource $res, Doorkeeper $d) {
+        
+        $prop = $d->getConfig('fedoraRelProp');
+        $propId = $d->getConfig('fedoraIdProp');
+        $metadata = $res->getMetadata();
+        
+        //if the RelProp property is missing
+        if (!$metadata->hasProperty(EasyRdfUtil::fixPropName($prop))) {
+            self::log(" The 'fedoraRelProp' is missing!");
+            throw new \LogicException("The 'fedoraRelProp' is missing!");
+        } else {
+            //if not missing the RelProp property then get it from the meta
+            $relProp = $metadata->get(EasyRdfUtil::fixPropName($prop));
+            
+            //if it is empty
+            if(!$relProp->getUri()){
+                self::log(" The 'fedoraRelProp' is empty!");
+                throw new \LogicException("The 'fedoraRelProp' is empty!");
+            }
+            
+            if($metadata->countValues(EasyRdfUtil::fixPropName($prop)) > 1){
+                self::log(" There is more than 1 'fedoraRelProp'! Your resource can contains only one!");
+                throw new \LogicException("There is more than 1 'fedoraRelProp'! Your resource can contains only one!");
+            }
+            
+            //check the Fedora for this Object
+            $idUri = self::checkIExistingVal($propId, $relProp->getUri(), $d);
+            //if there is no Resource with this RelProp ID
+            if(!$idUri[0]->uri->getUri()){
+                self::log(" The given fedoraRelProp ID is not exists in the Fedora DB!");
+                throw new \LogicException("The given fedoraRelProp ID is not exists in the Fedora DB!");
+            }
+            
+            
+        }
+    }
+    
 }

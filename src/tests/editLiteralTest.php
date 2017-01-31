@@ -23,6 +23,9 @@ $meta = $fr->getMetadata();
 $meta->delete("http://purl.org/dc/elements/1.1/title");
 //insert the property with the new key
 $meta->addLiteral("http://purl.org/dc/elements/1.1/title", "testing the edit2");
+
+$meta->addResource("http://purl.org/dc/terms/isPartOf", "https://id.acdh.oeaw.ac.at/0e08a54f-4909-df66-994a-9abf7d68b8d6");
+$meta->addResource("http://purl.org/dc/terms/isPartOf", "https://id.acdh.oeaw.ac.at/0e08a54f-4909-df66-994a-9abf7d68b8d66");
 //$meta->addLiteral("http://purl.org/dc/terms/identifier", "http://aaaa222222233111.com");
 
 //try {
