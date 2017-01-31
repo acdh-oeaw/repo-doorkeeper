@@ -194,10 +194,10 @@ class Handler {
             
             $numberOfId = $metadata->countValues(EasyRdfUtil::fixPropName($prop));
             
-            if( $numberOfId > 1){                
+            if( $numberOfId > 1){
                 self::log(" You have more than ONE ACDH ID in the  - fedoraIdProp");
                 throw new \LogicException("You have more than ONE ACDH ID in the  - fedoraIdProp");
-            }           
+            }
            
             //we have an identifier so we will check blazegraph
             $existingId = $metadata->get(EasyRdfUtil::fixPropName($prop))->__toString();
@@ -206,21 +206,23 @@ class Handler {
             
             // this ID exists in the DB
             if($result->numRows() > 0){
+                
                 $metaUri = $metadata->getUri();
                 //create fedora uri from the metadata transaction uri
                 $metaUri = self::changeTransUriToFedoraUri($metaUri, $d);
                 
                 // if the existing id uri and the metadata uri is not the same
-                // then the user try to change the existing ID                
+                // then the user try to change the existing ID
                 if($result[0]->uri->getUri() !== $metaUri){
                     self::log(" ACDH ID Already exists in the database!");
-                    throw new \LogicException("ACDH ID Already exists in the database!!");                
+                    throw new \LogicException("ACDH ID Already exists in the database!!");
                 }
             }
-        }        
+        }
         return true;
     }
     
+    //creating a fedora res uri from the transaction Uri
     static private function changeTransUriToFedoraUri($uri, Doorkeeper $d){
         
         if (strpos($uri, 'fedora:8080') !== false) {
