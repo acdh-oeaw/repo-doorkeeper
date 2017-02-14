@@ -1,3 +1,4 @@
-RewriteEngine on
+php_value max_execution_time 600
 
+RewriteEngine on
 RewriteRule ^.*$ index.php

@@ -110,16 +110,20 @@ class Doorkeeper {
         return $this->cfg->get($prop);
     }
 
-    public function getProxyBaseUrl() {
+    public function getProxyBaseUrl(): string {
         return $this->proxyBaseUrl;
     }
 
-    public function getTransactionId() {
+    public function getTransactionId(): string {
         return $this->transactionId;
     }
 
-    public function getMethod() {
+    public function getMethod(): string {
         return $this->method;
+    }
+
+    public function getFedora(): Fedora {
+        return $this->fedora;
     }
 
     public function registerCommitHandler($handler) {
@@ -173,7 +177,7 @@ class Doorkeeper {
         ");
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
-            if ($this->method === 'POST') {
+            if ($this->method === 'POST' || $response->getStatusCode() == 201) {
                 $location = $this->parseLocations($response);
                 $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $location);
                 $resourceId = preg_replace('|/fcr:metadata$|', '', $location);

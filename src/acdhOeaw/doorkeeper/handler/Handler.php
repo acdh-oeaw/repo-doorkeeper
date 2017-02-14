@@ -30,9 +30,12 @@ use zozlak\util\UUID;
 use zozlak\util\Config;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
+use acdhOeaw\fedora\metadataQuery\Query;
+use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\util\EasyRdfUtil;
-
 use acdhOeaw\epicHandle\HandleService;
+use RuntimeException;
+use LogicException;
 
 /**
  * Implements the ACDH business logic
@@ -41,7 +44,7 @@ use acdhOeaw\epicHandle\HandleService;
  */
 class Handler {
 
-    static private $logfile;   
+    static private $logfile;
 
     static public function init(Config $cfg) {
         self::$logfile = fopen($cfg->get('doorkeeperLogFile'), 'a');
@@ -55,15 +58,15 @@ class Handler {
      *   or modified in this transaction
      * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
      * @throws \LogicException
-    */
-    static public function checkTransaction(array $modResources, Doorkeeper $d) {        
+     */
+    static public function checkTransaction(array $modResources, Doorkeeper $d) {
         self::log("transaction commit handler for: " . $d->getTransactionId());
-                
+
         foreach ($modResources as $i) {
             self::log('  ' . $i->getUri());
-            self::checkIdProp($i, $d);
+            self::checkIdProp($i, $modResources, $d);
             self::checkTitleProp($i, $d);
-            self::checkRelProp($i, $d);
+            self::checkRelProp($i, $modResources, $d);
         }
     }
 
@@ -79,12 +82,10 @@ class Handler {
      * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
      * @throws \LogicException
      * @see checkEdit()
-    */
-    static public function checkCreate(FedoraResource $res, Doorkeeper $d) {        
+     */
+    static public function checkCreate(FedoraResource $res, Doorkeeper $d) {
         self::log('post create handler for: ' . $d->getTransactionId());
-        self::log("  " . $res->getUri());        
-        //self::checkIdProp($res, $d);
-        self::generatePid($res, $d);
+        self::log("  " . $res->getUri());
     }
 
     /**
@@ -100,207 +101,198 @@ class Handler {
      * @param \acdhOeaw\doorkeeper\FedoraResource $res created resource
      * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
      * @throws \LogicException
-    */
-    static public function checkEdit(FedoraResource $res, Doorkeeper $d) {        
+     */
+    static public function checkEdit(FedoraResource $res, Doorkeeper $d) {
         self::log('post edit handler for: ' . $d->getMethod() . ' ' . $d->getTransactionId());
         self::log("  " . $res->getUri());
-        
-        self::checkIdProp($res, $d);
-        self::checkTitleProp($res, $d);        
+
+        self::checkIdProp($res, array(), $d);
+        self::checkTitleProp($res, $d);
         self::generatePid($res, $d);
     }
-    
+
     /**
      * Writes a message to the doorkeeper log.
      * 
      * @param type $msg message to write
-    */
+     */
     static private function log($msg) {
         fwrite(self::$logfile, $msg . "\n");
     }
 
-    static private function checkTitleProp(FedoraResource $res, Doorkeeper $d) {
-        
-        $titleProp = $d->getConfig('fedoraTitleProp');
-        $metadata = $res->getMetadata();
-        $tpArr = array();
-        
-        //property is missing
-        if (!$metadata->allLiterals(EasyRdfUtil::fixPropName($titleProp))) {            
-            self::log("    no title property");
-            throw new \LogicException("fedoraTitleProp is missing!");            
+    static private function getPath(string $uri, Doorkeeper $d): string {
+        $tx = $d->getTransactionId();
+        $pos = strpos($uri, $tx);
+        if ($pos === false) {
+            throw new RuntimeException('transaction id not found in the URI');
         }
-        
-        $tpArr = $metadata->allLiterals(EasyRdfUtil::fixPropName($titleProp));
-        
-        // if the user submitted more than one value
-        if(count($tpArr) > 1){
-            self::log("You have more than ONE title!");
-            throw new \LogicException("You have more than ONE fedoraTitleProp!");
-        }else {
-            foreach($tpArr as $v){
-                //if the submitted value was empty
-                if(empty(trim($v))){
-                    self::log("    title property value is missing");
-                    throw new \LogicException("fedoraTitleProp value is missing!");
-                }
-            }
-        }
-    }
-  
-    //check the UUID in the DB
-    static private function checkUUID(string $prop, string $nsId, Doorkeeper $d){
-        
-        if($d->getConfig('sparqlUrl') === null){
-            self::log("    no sparqlUrl");
-            throw new \LogicException("sparqlUrl is missing or empty!");
-        }
-        
-        $sparql = new \EasyRdf_Sparql_Client($d->getConfig('sparqlUrl'));
-        //check the generated uuid in the database        
-        $query = sprintf('SELECT ?uri WHERE { ?uri %s %s } ', EasyRdfUtil::escapeUri($prop), EasyRdfUtil::escapeUri($nsId));           
-        $result = $sparql->query($query);
-        
-        return $result;
-    }
-    
-    static private function checkIExistingVal(string $prop, string $value, Doorkeeper $d){
-        
-        if($d->getConfig('sparqlUrl') === null){
-            self::log("    no sparqlUrl");
-            throw new \LogicException("sparqlUrl is missing or empty!");
-        }
-        
-        $sparql = new \EasyRdf_Sparql_Client($d->getConfig('sparqlUrl'));
-        //check the generated uuid in the database        
-        $query = sprintf('SELECT ?uri WHERE { ?uri %s %s } ', EasyRdfUtil::escapeUri($prop), EasyRdfUtil::escapeUri($value));           
-        $result = $sparql->query($query);
-        
-        return $result;
-    }
-    
-    static private function checkIdProp(FedoraResource $res, Doorkeeper $d) {
-        
-        $prop = $d->getConfig('fedoraIdProp');
-        $namespace = $d->getConfig('fedoraIdNamespace');
-        $metadata = $res->getMetadata();
-        
-        //resource has no identifier
-        if (!$metadata->hasProperty(EasyRdfUtil::fixPropName($prop))) {
-                        
-            if ($namespace === null) {
-                return false;
-            }
-            //generate the uuid and the namespace
-            $uuid = UUID::v4();
-            $nsId = $namespace.$uuid;
-            //check the generated uuid in the database
-            $result = self::checkUUID($prop, $nsId, $d);
-            
-            if($result->numRows() > 0){
-                self::log(" ACDH ID Already exists in the database!");
-                throw new \LogicException("ACDH ID Already exists in the database!!");
-            }else {                
-                $metadata->addResource($prop, $nsId);
-                $res->setMetadata($metadata);
-                $res->updateMetadata();
-            }
-            
-        }else {
-            
-            $numberOfId = $metadata->countValues(EasyRdfUtil::fixPropName($prop));
-            
-            if( $numberOfId > 1){
-                self::log(" You have more than ONE ACDH ID in the  - fedoraIdProp");
-                throw new \LogicException("You have more than ONE ACDH ID in the  - fedoraIdProp");
-            }
-           
-            //we have an identifier so we will check blazegraph
-            $existingId = $metadata->get(EasyRdfUtil::fixPropName($prop))->__toString();
-            
-            $result = self::checkUUID($prop, $existingId, $d);
-            
-            // this ID exists in the DB
-            if($result->numRows() > 0){
-                
-                $metaUri = $metadata->getUri();
-                //create fedora uri from the metadata transaction uri
-                $metaUri = self::changeTransUriToFedoraUri($metaUri, $d);
-                
-                // if the existing id uri and the metadata uri is not the same
-                // then the user try to change the existing ID
-                if($result[0]->uri->getUri() !== $metaUri){
-                    self::log(" ACDH ID Already exists in the database!");
-                    throw new \LogicException("ACDH ID Already exists in the database!!");
-                }
-            }
-        }
-        return true;
-    }
-    
-    //creating a fedora res uri from the transaction Uri
-    static private function changeTransUriToFedoraUri($uri, Doorkeeper $d){
-        
-        if (strpos($uri, 'fedora:8080') !== false) {
-            $uri = str_replace('http://fedora:8080/rest', $d->getConfig('fedoraApiUrl'), $uri);
-            $uri = str_replace($d->getTransactionId(), "", $uri);                    
-        }
-        
-        return $uri;
+        return substr($uri, $pos + strlen($tx));
     }
 
-    static private function generatePid(FedoraResource $res, Doorkeeper $d){        
-        $pidProp = EasyRdfUtil::fixPropName($d->getConfig('epicPidProp'));
-        
+    static private function checkTitleProp(FedoraResource $res, Doorkeeper $d) {
         $metadata = $res->getMetadata();
-        if($metadata->getLiteral($pidProp) !== null) {
+        $ontologyLoc = $d->getConfig('doorkeeperOntologyLocation');
+        $resLoc = self::getPath($res->getUri(), $d);
+        if (strpos($resLoc, $ontologyLoc) === 0) {
+            $titleProp = $d->getConfig('doorkeeperOntologyLabelProp');
+        } else {
+            $titleProp = $d->getConfig('fedoraTitleProp');
+        }
+
+        $titles = $metadata->allLiterals(EasyRdfUtil::fixPropName($titleProp));
+
+        // property is missing
+        if (count($titles) == 0) {
+            self::log("    no title property");
+            throw new \LogicException("fedoraTitleProp is missing");
+        }
+
+        // more the one property
+        if (count($titles) > 1) {
+            self::log("    more than one title");
+            throw new \LogicException("more than one fedoraTitleProp");
+        } else if (trim($titles[0]) == '') {
+            self::log("    empty title property value");
+            throw new \LogicException("fedoraTitleProp value is empty");
+        }
+    }
+
+    static private function checkIdProp(FedoraResource $res, array $txRes, Doorkeeper $d) {
+        $prop = EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp'));
+        $namespace = $d->getConfig('fedoraIdNamespace');
+        $metadata = $res->getMetadata();
+
+        if (count($metadata->allLiterals($prop)) > 0) {
+            self::log("  fedoraIdProp being a literal");
+            throw new \LogicException("fedoraIdProp is a literal");
+        }
+
+        $ids = $metadata->allResources($prop);
+        if (count($ids) > 1) {
+            self::log("  many fedoraIdProp");
+            throw new \LogicException("many fedoraIdProp");
+        }
+
+        if (count($ids) == 0) {
+            // no id - generate one
+            do {
+                $id = $namespace . UUID::v4();
+            } while (self::checkIfIdExists($id, $txRes, $d));
+
+//self::log('### res ' . self::getPath($res->getUri(), $d) . ' was assigned id ' . $id);
+            $metadata->addResource($prop, $id);
+            $res->setMetadata($metadata);
+            $res->updateMetadata();
+        } else {
+//self::log('### res ' . self::getPath($res->getUri(), $d) . ' has id ' . $id);
+            // there is an id - check it
+            $id = $res->getId();
+
+            $ontologyLoc = $d->getConfig('doorkeeperOntologyLocation');
+            $resLoc = self::getPath($res->getUri(), $d);
+            if (!(strpos($id, $d->getConfig('fedoraIdNamespace')) === 0) && !(strpos($resLoc, $ontologyLoc) === 0)) {
+                self::log("  fedoraIdProp in a wrong namespace");
+                throw new \LogicException("fedoraIdProp in a wrong namespace");
+            }
+
+            $matches = array();
+            foreach ($d->getFedora()->getResourcesById($id) as $i) {
+                $matches[] = $i->getUri();
+            }
+            foreach ($txRes as $i) {
+                if ($i->getId() === $id) {
+                    $matches[] = $i->getUri();
+                }
+            }
+            $matches = array_unique($matches);
+
+            if (count($matches) > 1 || count($matches) == 1 && $matches[0] !== $res->getUri()) {
+                self::log("  duplicated fedoraIdProp: " . implode(', ', $matches));
+                throw new \LogicException("duplicated fedoraIdProp");
+            }
+
+            // check if URI did not change for existing resource
+            // (we can compare it only to the state before transaction as changes within transaction are not saved anywhere)
+            $uri = $d->getFedora()->standardizeUri($res->getUri());
+            $query = (new Query())->setDistinct(true)->setSelect(array('?id'));
+            $query->addParameter(new HasTriple($uri, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', '?a'));
+            $query->addParameter((new HasTriple($uri, $d->getConfig('fedoraIdProp'), '?id'))->setOptional(true));
+            $result = $d->getFedora()->runQuery($query);
+            if (count($result) > 0 && $result[0]->id != $id) {
+                self::log("  fedoraIdProp changed from " . $result[0]->id . ' to ' . $id);
+                throw new \LogicException("fedoraIdProp changed from " . $result[0]->id . ' to ' . $id);
+            }
+        }
+    }
+
+    static private function generatePid(FedoraResource $res, Doorkeeper $d) {
+        $pidProp = EasyRdfUtil::fixPropName($d->getConfig('epicPidProp'));
+
+        $metadata = $res->getMetadata();
+        if ($metadata->getLiteral($pidProp) !== null) {
             $metadata->delete($pidProp);
-            
-            $uri = $metadata->getResource(EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp')))->getUri();            
+
+            $uri = $metadata->getResource(EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp')))->getUri();
             $ps = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
             $pid = $ps->create($uri);
-            
+
             $metadata->add($pidProp, $pid);
             $res->setMetadata($metadata);
             $res->updateMetadata();
         }
     }
-    
-    static private function checkRelProp(FedoraResource $res, Doorkeeper $d) {
-        
-        $prop = $d->getConfig('fedoraRelProp');
-        $propId = $d->getConfig('fedoraIdProp');
+
+    static private function checkRelProp(FedoraResource $res, array $txRes, Doorkeeper $d) {
+        $prop = EasyRdfUtil::fixPropName($d->getConfig('fedoraRelProp'));
+        $propId = EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp'));
         $metadata = $res->getMetadata();
-        
-        //if the RelProp property is missing
-        if (!$metadata->hasProperty(EasyRdfUtil::fixPropName($prop))) {
-            self::log(" The 'fedoraRelProp' is missing!");
-            throw new \LogicException("The 'fedoraRelProp' is missing!");
-        } else {
-            //if not missing the RelProp property then get it from the meta
-            $relProp = $metadata->get(EasyRdfUtil::fixPropName($prop));
-            
-            //if it is empty
-            if(!$relProp->getUri()){
-                self::log(" The 'fedoraRelProp' is empty!");
-                throw new \LogicException("The 'fedoraRelProp' is empty!");
+        $resId = $res->getId();
+
+        if (count($metadata->allLiterals($prop)) > 0) {
+            self::log("  fedoraRelProp is a literal");
+            throw new LogicException("fedoraRelProp is a literal");
+        }
+
+        $rels = $metadata->allResources($prop);
+        foreach ($rels as $i) {
+            $id = trim($i->getUri());
+
+            if (!(strpos($id, $d->getConfig('fedoraIdNamespace')) === 0)) {
+                self::log("  fedoraRelProp in a wrong namespace");
+                throw new \LogicException("fedoraRelProp in a wrong namespace");
             }
-            
-            if($metadata->countValues(EasyRdfUtil::fixPropName($prop)) > 1){
-                self::log(" There is more than 1 'fedoraRelProp'! Your resource can contains only one!");
-                throw new \LogicException("There is more than 1 'fedoraRelProp'! Your resource can contains only one!");
+
+            if ($id === $resId) {
+                self::log("  fedoraRelProp is pointing to itself");
+                throw new \LogicException("fedoraRelProp is pointing to itself");
             }
-            
-            //check the Fedora for this Object
-            $idUri = self::checkIExistingVal($propId, $relProp->getUri(), $d);
-            //if there is no Resource with this RelProp ID
-            if(!$idUri[0]->uri->getUri()){
-                self::log(" The given fedoraRelProp ID is not exists in the Fedora DB!");
-                throw new \LogicException("The given fedoraRelProp ID is not exists in the Fedora DB!");
+
+            if (!self::checkIfIdExists($id, $txRes, $d)) {
+                self::log("  fedoraRelProp does not exist in the repository: " . $id);
+//foreach($txRes as $r) self::log($r->getId());
+                throw new \LogicException("fedoraRelProp does not exist in the repository: " . $id);
             }
-            
-            
         }
     }
-    
+
+    static private function checkIfIdExists(string $uri, array $resources, Doorkeeper $d) {
+        $validNamespace = $d->getConfig('fedoraIdNamespace');
+        if (strpos($uri, $validNamespace) !== 0) {
+            return true; // resource outside our repository, we believe it exists
+        }
+
+        $res = $d->getFedora()->getResourcesById($uri);
+        if (count($res) > 0) {
+            return true;
+        }
+
+        foreach ($resources as $i) {
+            if ($i->getId() === $uri) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 }
