@@ -67,6 +67,7 @@ class Handler {
             self::checkIdProp($i, $modResources, $d);
             self::checkTitleProp($i, $d);
             self::checkRelProp($i, $modResources, $d);
+            self::checkIdRef($i, $modResources, $d);
         }
     }
 
@@ -179,12 +180,10 @@ class Handler {
                 $id = $namespace . UUID::v4();
             } while (self::checkIfIdExists($id, $txRes, $d));
 
-//self::log('### res ' . self::getPath($res->getUri(), $d) . ' was assigned id ' . $id);
             $metadata->addResource($prop, $id);
             $res->setMetadata($metadata);
             $res->updateMetadata();
         } else {
-//self::log('### res ' . self::getPath($res->getUri(), $d) . ' has id ' . $id);
             // there is an id - check it
             $id = $res->getId();
 
@@ -242,9 +241,25 @@ class Handler {
         }
     }
 
+    static private function checkIdRef(FedoraResource $res, array $txRes, Doorkeeper $d) {
+        $idNmsp = $d->getConfig('fedoraIdNamespace');
+        $meta = $res->getMetadata();
+
+        foreach ($meta->propertyUris() as $prop) {
+            $prop = EasyRdfUtil::fixPropName($prop);
+            foreach ($meta->allResources($prop) as $uri) {
+                $uri = $uri->getUri();
+                if (strpos($uri, $idNmsp) === 0 && !self::checkIfIdExists($uri, $txRes, $d)) {
+                    self::log("  metadata refer to a non-existing fedoraId");
+                    throw new LogicException('metadata refer to a non-existing fedoraId');
+                }
+            }
+        }
+    }
+
     static private function checkRelProp(FedoraResource $res, array $txRes, Doorkeeper $d) {
         $prop = EasyRdfUtil::fixPropName($d->getConfig('fedoraRelProp'));
-        $propId = EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp'));
+        $idNmsp = $d->getConfig('fedoraIdNamespace');
         $metadata = $res->getMetadata();
         $resId = $res->getId();
 
@@ -257,7 +272,7 @@ class Handler {
         foreach ($rels as $i) {
             $id = trim($i->getUri());
 
-            if (!(strpos($id, $d->getConfig('fedoraIdNamespace')) === 0)) {
+            if (!(strpos($id, $idNmsp) === 0)) {
                 self::log("  fedoraRelProp in a wrong namespace");
                 throw new \LogicException("fedoraRelProp in a wrong namespace");
             }
@@ -269,7 +284,6 @@ class Handler {
 
             if (!self::checkIfIdExists($id, $txRes, $d)) {
                 self::log("  fedoraRelProp does not exist in the repository: " . $id);
-//foreach($txRes as $r) self::log($r->getId());
                 throw new \LogicException("fedoraRelProp does not exist in the repository: " . $id);
             }
         }

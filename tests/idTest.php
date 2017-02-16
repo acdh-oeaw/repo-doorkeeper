@@ -147,3 +147,30 @@ try {
     }
 }
 $fedora->rollback();
+
+
+// any property with an object being URI in the id namespace must resolve to an existing resource
+$fedora->begin();
+$res1 = $fedora->createResource($meta);
+$fedora->commit();
+$id = $res1->getId();
+$fedora->begin();
+$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2->addResource('http://my.own/property', $id);
+$res2 = $fedora->createResource($meta2);
+$fedora->commit();
+$fedora->begin();
+$meta3 = EasyRdfUtil::cloneResource($meta);
+$meta3->addResource('http://my.own/property', $cfg->get('fedoraIdNamespace') . 'non-existing-resource');
+$res3 = $fedora->createResource($meta3);
+try {
+    $fedora->commit();
+    throw new Exception('no error');
+} catch (ClientException $e) {
+    $resp = $e->getResponse();
+    if ($resp->getStatusCode() != 400 || !preg_match('|metadata refer to a non-existing fedoraId|', $resp->getBody())) {
+        throw $e;
+    }
+}
+
+
