@@ -32,6 +32,7 @@ class Proxy {
         $options['on_headers'] = function(Response $r) {
             $this->handleHeaders($r);
         };
+        $options['verify'] = false;
         $client = new Client($options);
 
         $authHeader = null;
