@@ -32,7 +32,6 @@ use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
-use acdhOeaw\util\EasyRdfUtil;
 use acdhOeaw\epicHandle\HandleService;
 use RuntimeException;
 use LogicException;
@@ -140,7 +139,7 @@ class Handler {
             $titleProp = $d->getConfig('fedoraTitleProp');
         }
 
-        $titles = $metadata->allLiterals(EasyRdfUtil::fixPropName($titleProp));
+        $titles = $metadata->allLiterals($titleProp);
 
         // property is missing
         if (count($titles) == 0) {
@@ -159,7 +158,7 @@ class Handler {
     }
 
     static private function checkIdProp(FedoraResource $res, array $txRes, Doorkeeper $d) {
-        $prop = EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp'));
+        $prop = $d->getConfig('fedoraIdProp');
         $namespace = $d->getConfig('fedoraIdNamespace');
         $metadata = $res->getMetadata();
 
@@ -225,13 +224,13 @@ class Handler {
     }
 
     static private function generatePid(FedoraResource $res, Doorkeeper $d) {
-        $pidProp = EasyRdfUtil::fixPropName($d->getConfig('epicPidProp'));
+        $pidProp = $d->getConfig('epicPidProp');
 
         $metadata = $res->getMetadata();
         if ($metadata->getLiteral($pidProp) !== null) {
             $metadata->delete($pidProp);
 
-            $uri = $metadata->getResource(EasyRdfUtil::fixPropName($d->getConfig('fedoraIdProp')))->getUri();
+            $uri = $metadata->getResource($d->getConfig('fedoraIdProp'))->getUri();
             $ps = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
             $pid = $ps->create($uri);
 
@@ -246,7 +245,6 @@ class Handler {
         $meta = $res->getMetadata();
 
         foreach ($meta->propertyUris() as $prop) {
-            $prop = EasyRdfUtil::fixPropName($prop);
             foreach ($meta->allResources($prop) as $uri) {
                 $uri = $uri->getUri();
                 if (strpos($uri, $idNmsp) === 0 && !self::checkIfIdExists($uri, $txRes, $d)) {
@@ -258,7 +256,7 @@ class Handler {
     }
 
     static private function checkRelProp(FedoraResource $res, array $txRes, Doorkeeper $d) {
-        $prop = EasyRdfUtil::fixPropName($d->getConfig('fedoraRelProp'));
+        $prop = $d->getConfig('fedoraRelProp');
         $idNmsp = $d->getConfig('fedoraIdNamespace');
         $metadata = $res->getMetadata();
         $resId = $res->getId();

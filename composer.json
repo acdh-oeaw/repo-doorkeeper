@@ -2,7 +2,19 @@
     "require": {
         "guzzlehttp/guzzle": "~6.0",
         "zozlak/util": "*",
-        "acdh-oeaw/repo-php-util": "*",
+        "acdh-oeaw/repo-php-util": "dev-master",
         "acdh-oeaw/epic-handle":"*"
-    }
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/acdh-oeaw/repo-php-util"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/acdh-oeaw/easyrdf"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }
