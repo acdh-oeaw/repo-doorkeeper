@@ -2,7 +2,7 @@
     "require": {
         "guzzlehttp/guzzle": "~6.0",
         "zozlak/util": "*",
-        "acdh-oeaw/repo-php-util": "dev-master",
+        "acdh-oeaw/repo-php-util": "*",
         "acdh-oeaw/epic-handle":"*"
     },
     "repositories": [
