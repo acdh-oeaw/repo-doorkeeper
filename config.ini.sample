@@ -16,8 +16,6 @@ doorkeeperLogFile="log"
 doorkeeperDefaultUserPswd=""
 sparqlUrl="http://fedora.localhost/blazegraph/sparql"
 
-fedoraBaseUrl="http://fedora:8080"
 fedoraApiUrl="http://fedora.localhost/rest"
 fedoraUser="admin"
 fedoraPswd="admin"
-fedoraHost="fedora.localhost"

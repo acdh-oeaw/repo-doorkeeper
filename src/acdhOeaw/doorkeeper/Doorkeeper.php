@@ -70,13 +70,13 @@ class Doorkeeper {
 
     public function __construct(Config $cfg, PDO $pdo) {
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
-        $this->proxy = new Proxy($cfg->get('fedoraHost'));
+        $this->proxy = new Proxy();
         $this->fedora = new Fedora($cfg);
         $this->pdo = $pdo;
         $this->cfg = $cfg;
 
         $this->baseUrl = preg_replace('|/$|', '', $cfg->get('doorkeeperBaseUrl')) . '/';
-        $this->proxyBaseUrl = preg_replace('|/$|', '', $cfg->get('fedoraBaseUrl')) . '/';
+        $this->proxyBaseUrl = substr(preg_replace('|/$|', '', $cfg->get('fedoraApiUrl')) . '/', 0, -strlen($this->baseUrl) + 1);
 
         $reqUri = filter_input(INPUT_SERVER, 'REQUEST_URI');
         if (!preg_match('|^' . $this->baseUrl . '|', $reqUri)) {

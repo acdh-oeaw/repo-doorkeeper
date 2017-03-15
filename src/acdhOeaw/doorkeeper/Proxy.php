@@ -19,12 +19,6 @@ use GuzzleHttp\Psr7\Request;
  */
 class Proxy {
 
-    private $host;
-
-    public function __construct(string $host) {
-        $this->host = $host;
-    }
-
     public function proxy($url): Response {
         $options = array();
         $output = fopen('php://output', 'w');
@@ -44,8 +38,7 @@ class Proxy {
         $headers = array(
             'Authorization' => $authHeader,
             'Accept' => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
-            'Content-Type' => $contentType,
-            'Host' => $this->host
+            'Content-Type' => $contentType
         );
 
         $method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
