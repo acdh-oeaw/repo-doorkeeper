@@ -143,16 +143,13 @@ class Handler {
 
         // property is missing
         if (count($titles) == 0) {
-            self::log("    no title property");
             throw new \LogicException("fedoraTitleProp is missing");
         }
 
         // more the one property
         if (count($titles) > 1) {
-            self::log("    more than one title");
             throw new \LogicException("more than one fedoraTitleProp");
         } else if (trim($titles[0]) == '') {
-            self::log("    empty title property value");
             throw new \LogicException("fedoraTitleProp value is empty");
         }
     }
@@ -163,17 +160,16 @@ class Handler {
         $metadata = $res->getMetadata();
 
         if (count($metadata->allLiterals($prop)) > 0) {
-            self::log("  fedoraIdProp being a literal");
             throw new \LogicException("fedoraIdProp is a literal");
         }
 
         $ids = $metadata->allResources($prop);
         if (count($ids) > 1) {
-            self::log("  many fedoraIdProp");
             throw new \LogicException("many fedoraIdProp");
         }
 
         if (count($ids) == 0) {
+            self::log("  no ACDH id - generating one");
             // no id - generate one
             do {
                 $id = $namespace . UUID::v4();
@@ -189,7 +185,6 @@ class Handler {
             $ontologyLoc = $d->getConfig('doorkeeperOntologyLocation');
             $resLoc = self::getPath($res->getUri(), $d);
             if (!(strpos($id, $d->getConfig('fedoraIdNamespace')) === 0) && !(strpos($resLoc, $ontologyLoc) === 0)) {
-                self::log("  fedoraIdProp in a wrong namespace");
                 throw new \LogicException("fedoraIdProp in a wrong namespace");
             }
 
@@ -205,7 +200,6 @@ class Handler {
             $matches = array_unique($matches);
 
             if (count($matches) > 1 || count($matches) == 1 && $matches[0] !== $res->getUri()) {
-                self::log("  duplicated fedoraIdProp: " . implode(', ', $matches));
                 throw new \LogicException("duplicated fedoraIdProp");
             }
 
@@ -217,7 +211,6 @@ class Handler {
             $query->addParameter((new HasTriple($uri, $d->getConfig('fedoraIdProp'), '?id'))->setOptional(true));
             $result = $d->getFedora()->runQuery($query);
             if (count($result) > 0 && $result[0]->id != $id) {
-                self::log("  fedoraIdProp changed from " . $result[0]->id . ' to ' . $id);
                 throw new \LogicException("fedoraIdProp changed from " . $result[0]->id . ' to ' . $id);
             }
         }
@@ -248,7 +241,6 @@ class Handler {
             foreach ($meta->allResources($prop) as $uri) {
                 $uri = $uri->getUri();
                 if (strpos($uri, $idNmsp) === 0 && !self::checkIfIdExists($uri, $txRes, $d)) {
-                    self::log("  metadata refer to a non-existing fedoraId");
                     throw new LogicException('metadata refer to a non-existing fedoraId');
                 }
             }
@@ -262,7 +254,6 @@ class Handler {
         $resId = $res->getId();
 
         if (count($metadata->allLiterals($prop)) > 0) {
-            self::log("  fedoraRelProp is a literal");
             throw new LogicException("fedoraRelProp is a literal");
         }
 
@@ -271,17 +262,14 @@ class Handler {
             $id = trim($i->getUri());
 
             if (!(strpos($id, $idNmsp) === 0)) {
-                self::log("  fedoraRelProp in a wrong namespace");
                 throw new \LogicException("fedoraRelProp in a wrong namespace");
             }
 
             if ($id === $resId) {
-                self::log("  fedoraRelProp is pointing to itself");
                 throw new \LogicException("fedoraRelProp is pointing to itself");
             }
 
             if (!self::checkIfIdExists($id, $txRes, $d)) {
-                self::log("  fedoraRelProp does not exist in the repository: " . $id);
                 throw new \LogicException("fedoraRelProp does not exist in the repository: " . $id);
             }
         }

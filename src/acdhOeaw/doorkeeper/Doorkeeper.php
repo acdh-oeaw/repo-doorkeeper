@@ -189,8 +189,6 @@ class Doorkeeper {
                         $i($res, $this);
                     } catch (LogicException $e) {
                         $errors[] = $e;
-                    } catch (Exception $e) {
-                        // errors in handlers should not interrupt doorkeeper
                     }
                 }
             } else {
@@ -203,8 +201,6 @@ class Doorkeeper {
                         $i($res, $this);
                     } catch (LogicException $e) {
                         $errors[] = $e;
-                    } catch (Exception $e) {
-                        // errors in handlers should not interrupt doorkeeper
                     }
                 }
             }
@@ -347,9 +343,12 @@ class Doorkeeper {
         }
 
         header('HTTP/1.1 400 Bad Request - doorkeeper checks failed');
+        $logFile = fopen($this->cfg->get('doorkeeperLogFile'), 'a');
         foreach ($errors as $i) {
             echo $i->getMessage() . "\n\n";
+            fwrite($logFile, '    ' . ($i instanceof LogicException ? $i->getMessage() : $i) . "\n");
         }
+        fclose($logFile);
     }
 
 }

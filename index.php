@@ -6,8 +6,10 @@ use zozlak\util\Config;
 use zozlak\util\ClassLoader;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\doorkeeper\handler\Handler;
+use EasyRdf\RdfNamespace;
 
 $cl = new ClassLoader();
+RdfNamespace::set('dct', 'http://purl.org/dc/terms/');
 
 $config = new Config('config.ini');
 
