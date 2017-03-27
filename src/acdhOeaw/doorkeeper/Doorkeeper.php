@@ -149,7 +149,7 @@ class Doorkeeper {
 
     public function getDeletedResourceId(string $uri): string {
         $resourceId = $this->extractResourceId($this->fedora->sanitizeUri($uri));
-        
+
         $uri = $query = "SELECT acdh_id FROM resources WHERE transaction_id = ? AND resource_id = ?";
         $query = $this->pdo->prepare($query);
         $query->execute(array($this->transactionId, $resourceId));
@@ -158,6 +158,12 @@ class Doorkeeper {
             throw new RuntimeException('acdh id of ' . $resourceId . ' not found ' . $this->transactionId);
         }
         return $id;
+    }
+
+    public function isOntologyPart(string $uri): bool {
+        $uri = $this->fedora->sanitizeUri($uri);
+        $ontology = $this->fedora->sanitizeUri($this->cfg->get('doorkeeperOntologyLocation'));
+        return strpos($uri, $ontology) === 0;
     }
 
     public function handleRequest() {
@@ -207,12 +213,18 @@ class Doorkeeper {
         try {
             $acdhId = null;
             if ($this->method === 'DELETE') {
-                $res = $this->fedora->getResourceByUri($this->proxyUrl);
-                $acdhId = $res->getId();
-                $resourceId = $this->extractResourceId($this->proxyUrl);
+                try {
+                    $res = $this->fedora->getResourceByUri($this->proxyUrl);
+                    $acdhId = $res->getId();
+                    $resourceId = $this->extractResourceId($this->proxyUrl);
 
-                $updateQuery = $this->pdo->prepare("UPDATE resources SET acdh_id = ? WHERE transaction_id = ? AND resource_id = ?");
-                $updateQuery->execute(array($acdhId, $this->transactionId, $resourceId));
+                    $updateQuery = $this->pdo->prepare("UPDATE resources SET acdh_id = ? WHERE transaction_id = ? AND resource_id = ?");
+                    $updateQuery->execute(array($acdhId, $this->transactionId, $resourceId));
+                } catch (RuntimeException $e) {
+                    if (!$this->isOntologyPart($this->proxyUrl)) {
+                        throw $e;
+                    }
+                }
             }
 
             $response = $this->proxy->proxy($this->proxyUrl);

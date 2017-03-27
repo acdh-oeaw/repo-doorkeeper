@@ -78,8 +78,8 @@ class Handler {
             self::checkRelProp($i, $resources, $delUris, $d);
             self::checkIdRef($i, $resources, $delUris, $d);
         }
-        
-        foreach($delUris as $i) {
+
+        foreach ($delUris as $i) {
             $d->log('  ' . $i);
             self::checkOrphanedRelProp($i, $delUris, $d);
         }
@@ -170,6 +170,7 @@ class Handler {
     static private function checkIdProp(FedoraResource $res, array $txRes, array $delUris, Doorkeeper $d) {
         $prop = $d->getConfig('fedoraIdProp');
         $namespace = $d->getConfig('fedoraIdNamespace');
+        $ontologyPart = $d->isOntologyPart($res->getUri());
         $metadata = $res->getMetadata();
 
         if (count($metadata->allLiterals($prop)) > 0) {
@@ -221,8 +222,8 @@ class Handler {
             }
         }
 
-        // no ACDH id - generate one
-        if ($acdhIdCount == 0) {
+        // no ACDH id (and not part of the ontology) - generate one
+        if ($acdhIdCount == 0 && !$ontologyPart) {
             $d->log("  no ACDH id - generating one");
             do {
                 $id = $namespace . UUID::v4();
@@ -231,6 +232,11 @@ class Handler {
             $metadata->addResource($prop, $id);
             $res->setMetadata($metadata);
             $res->updateMetadata();
+        }
+
+        // part of the ontology - exactly one id required
+        if ($ontologyPart && count($ids) !== 1) {
+            throw new LogicException('ontology resources must have exactly one fedoraIdProp triple');
         }
     }
 
@@ -269,7 +275,7 @@ class Handler {
         $prop = $d->getConfig('fedoraRelProp');
         $idNmsp = $d->getConfig('fedoraIdNamespace');
         $metadata = $res->getMetadata();
-        $resId = $res->getId();
+        $resId = $d->isOntologyPart($res->getUri()) ? null : $res->getId();
 
         if (count($metadata->allLiterals($prop)) > 0) {
             throw new LogicException("fedoraRelProp is a literal");
@@ -307,8 +313,14 @@ class Handler {
         }
 
         foreach ($resources as $i) {
-            if ($i->getId() === $uri) {
-                return true;
+            try {
+                if ($i->getId() === $uri) {
+                    return true;
+                }
+            } catch (RuntimeException $e) {
+                if (!$d->isOntologyPart($i->getUri())) {
+                    throw $e;
+                }
             }
         }
 
