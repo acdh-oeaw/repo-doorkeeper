@@ -16,6 +16,7 @@ $config = new Config('config.ini');
 $dbFile = 'db.sqlite';
 $initDb = !file_exists($dbFile);
 $pdo = new PDO('sqlite:' . $dbFile);
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 if ($initDb) {
     Doorkeeper::initDb($pdo);
 }
