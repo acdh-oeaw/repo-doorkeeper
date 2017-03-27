@@ -21,7 +21,6 @@ if ($initDb) {
     Doorkeeper::initDb($pdo);
 }
 
-Handler::init($config);
 $doorkeeper = new Doorkeeper($config, $pdo);
 $doorkeeper->registerCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkTransaction');
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');

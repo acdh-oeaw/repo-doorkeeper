@@ -10,6 +10,7 @@ namespace acdhOeaw\doorkeeper;
 
 use PDO;
 use Exception;
+use RuntimeException;
 use LogicException;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
@@ -42,6 +43,7 @@ class Doorkeeper {
             CREATE TABLE resources (
                 transaction_id varchar(255) references transactions (transaction_id) on delete cascade, 
                 resource_id varchar(255), 
+                acdh_id varchar(255),
                 primary key (transaction_id, resource_id)
             )
         ");
@@ -67,6 +69,7 @@ class Doorkeeper {
     private $commitHandlers = array();
     private $postCreateHandlers = array();
     private $postEditHandlers = array();
+    private $logFile;
 
     public function __construct(Config $cfg, PDO $pdo) {
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
@@ -104,6 +107,12 @@ class Doorkeeper {
             $_SERVER['PHP_AUTH_USER'] = $credentials[0];
             $_SERVER['PHP_AUTH_PW'] = $credentials[1];
         }
+
+        $this->logFile = fopen($this->cfg->get('doorkeeperLogFile'), 'a');
+    }
+
+    public function __destruct() {
+        fclose($this->logFile);
     }
 
     public function getConfig($prop) {
@@ -138,6 +147,19 @@ class Doorkeeper {
         $this->postEditHandlers[] = $handler;
     }
 
+    public function getDeletedResourceId(string $uri): string {
+        $resourceId = $this->extractResourceId($this->fedora->sanitizeUri($uri));
+        
+        $uri = $query = "SELECT acdh_id FROM resources WHERE transaction_id = ? AND resource_id = ?";
+        $query = $this->pdo->prepare($query);
+        $query->execute(array($this->transactionId, $resourceId));
+        $id = $query->fetch(PDO::FETCH_COLUMN);
+        if (!$id) {
+            throw new RuntimeException('acdh id of ' . $resourceId . ' not found ' . $this->transactionId);
+        }
+        return $id;
+    }
+
     public function handleRequest() {
         if ($this->isMethodReadOnly() || $this->pass) {
             $this->handleReadOnly();
@@ -166,22 +188,37 @@ class Doorkeeper {
         }
     }
 
+    private function extractResourceId(string $uri): string {
+        $resourceId = $uri;
+        $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $resourceId);
+        $resourceId = preg_replace('|/fcr:metadata$|', '', $resourceId);
+        return $resourceId;
+    }
+
     private function handleResourceEdit() {
         $errors = array();
         // so complex to respect primary key when the same resource is modified many times in one transaction
         $query = $this->pdo->prepare("
-            INSERT INTO resources (transaction_id, resource_id) 
-            SELECT * 
-            FROM (SELECT ? AS a, ? AS b) AS t
+            INSERT INTO resources (transaction_id, resource_id, acdh_id) 
+            SELECT *
+            FROM (SELECT ? AS a, ? AS b, ? AS c) AS t
             WHERE NOT EXISTS (SELECT 1 FROM resources WHERE transaction_id = t.a AND resource_id = t.b)
         ");
         try {
+            $acdhId = null;
+            if ($this->method === 'DELETE') {
+                $res = $this->fedora->getResourceByUri($this->proxyUrl);
+                $acdhId = $res->getId();
+                $resourceId = $this->extractResourceId($this->proxyUrl);
+
+                $updateQuery = $this->pdo->prepare("UPDATE resources SET acdh_id = ? WHERE transaction_id = ? AND resource_id = ?");
+                $updateQuery->execute(array($acdhId, $this->transactionId, $resourceId));
+            }
+
             $response = $this->proxy->proxy($this->proxyUrl);
             if ($this->method === 'POST' || $response->getStatusCode() == 201) {
-                $location = $this->parseLocations($response);
-                $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $location);
-                $resourceId = preg_replace('|/fcr:metadata$|', '', $location);
-                $query->execute(array($this->transactionId, $resourceId));
+                $resourceId = $this->extractResourceId($this->parseLocations($response));
+                $query->execute(array($this->transactionId, $resourceId, null));
 
                 foreach ($this->postCreateHandlers as $i) {
                     try {
@@ -192,8 +229,8 @@ class Doorkeeper {
                     }
                 }
             } else {
-                $resourceId = preg_replace('|/fcr:metadata$|', '', $this->resourceId);
-                $query->execute(array($this->transactionId, $resourceId));
+                $resourceId = $this->extractResourceId($this->resourceId);
+                $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
                 foreach ($this->postEditHandlers as $i) {
                     try {
@@ -213,6 +250,7 @@ class Doorkeeper {
 
     private function handleTransactionEnd() {
         $errors = array();
+
         if ($this->resourceId === 'fcr:tx/fcr:commit') {
             // COMMIT - check resources integrity
             $query = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
@@ -224,31 +262,28 @@ class Doorkeeper {
             foreach ($this->commitHandlers as $i) {
                 try {
                     $i($resources, $this);
-                } catch (LogicException $e) {
-                    // Error reported by the handler
-                    $errors[] = $e;
                 } catch (Exception $e) {
-                    // errors in handlers should not interrupt doorkeeper
+                    $errors[] = $e;
                 }
             }
-            $this->reportErrors($errors, true);
         }
+
 
         // COMIT / ROLLBACK
         $query = $this->pdo->prepare("DELETE FROM resources WHERE transaction_id = ?");
-        $query->execute(array($this->transactionId));
+        //$query->execute(array($this->transactionId));
         $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
-        $query->execute(array($this->transactionId));
+        //$query->execute(array($this->transactionId));
 
         if (count($errors) == 0) {
             try {
                 $this->proxy->proxy($this->proxyUrl);
-            } catch (RequestException $e) {
-                
             } catch (Exception $e) {
-                
+                $errors[] = $e;
             }
         }
+
+        $this->reportErrors($errors, true);
     }
 
     private function handleTransactionBegin() {
@@ -325,7 +360,7 @@ class Doorkeeper {
      * 
      * Optionally rolls back the transaction.
      * 
-     * @param array $errors an array of errors (empty array if no errors occured)
+     * @param array $errors an array of errors (empty array if no errors occurred)
      * @param bool $rollback should transaction be rolled back upon errors
      */
     private function reportErrors(array $errors, bool $rollback) {
@@ -343,12 +378,19 @@ class Doorkeeper {
         }
 
         header('HTTP/1.1 400 Bad Request - doorkeeper checks failed');
-        $logFile = fopen($this->cfg->get('doorkeeperLogFile'), 'a');
         foreach ($errors as $i) {
             echo $i->getMessage() . "\n\n";
-            fwrite($logFile, '    ' . ($i instanceof LogicException ? $i->getMessage() : $i) . "\n");
+            $this->log('    ' . ($i instanceof LogicException ? $i->getMessage() : $i));
         }
-        fclose($logFile);
+    }
+
+    /**
+     * Writes a message to the doorkeeper log.
+     * 
+     * @param type $msg message to write
+     */
+    public function log($msg) {
+        fwrite($this->logFile, $msg . "\n");
     }
 
 }

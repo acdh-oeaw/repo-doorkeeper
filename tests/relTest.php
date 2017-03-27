@@ -12,15 +12,17 @@ use zozlak\util\Config;
 use acdhOeaw\fedora\Fedora;
 use acdhOeaw\util\EasyRdfUtil;
 use GuzzleHttp\Exception\ClientException;
+use EasyRdf\Graph;
 
 $cfg = new Config('config.ini');
 $fedora = new Fedora($cfg);
 $idProp = EasyRdfUtil::fixPropName($cfg->get('fedoraIdProp'));
 $relProp = EasyRdfUtil::fixPropName($cfg->get('fedoraRelProp'));
-$meta = (new EasyRdf_Graph())->resource('.');
+$meta = (new Graph())->resource('.');
 $meta->addLiteral($cfg->get('fedoraTitleProp'), 'test resource');
 
-// relation property must be a resource
+##########
+echo "relation property must be a resource\n";
 $fedora->begin();
 $meta1 = EasyRdfUtil::cloneResource($meta);
 $meta1->addLiteral($relProp, 'http://my.value/123');
@@ -35,7 +37,8 @@ try {
     }
 }
 
-// relation property must be in the ACDH id namespace
+##########
+echo "relation property must be in the ACDH id namespace\n";
 $fedora->begin();
 $meta1 = EasyRdfUtil::cloneResource($meta);
 $meta1->addResource($relProp, 'http://my.value/123');
@@ -50,7 +53,8 @@ try {
     }
 }
 
-// relation property can not point to the resource itself
+##########
+echo "relation property can not point to the resource itself\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $meta1 = $res1->getMetadata();
@@ -67,7 +71,8 @@ try {
     }
 }
 
-// relation can not point to an unexisting resource
+##########
+echo "relation can not point to an unexisting resource\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $meta1 = $res1->getMetadata();
@@ -84,18 +89,21 @@ try {
     }
 }
 
-// single relation in separate transactions
+##########
+echo "single relation in separate transactions\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $id1 = $res1->getId();
 $fedora->commit();
+sleep(2); // give triplestore time to synchronize
 $fedora->begin();
 $meta2 = EasyRdfUtil::cloneResource($meta);
 $meta2->addResource($relProp, $id1);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
 
-// single relation in single transaction
+##########
+echo "single relation in single transaction\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $id1 = $res1->getId();
@@ -104,13 +112,15 @@ $meta2->addResource($relProp, $id1);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
 
-// many relations in separate transactions
+##########
+echo "many relations in separate transactions\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $id1 = $res1->getId();
 $res2 = $fedora->createResource($meta);
 $id2 = $res2->getId();
 $fedora->commit();
+sleep(2); // give triplestore time to synchronize
 $fedora->begin();
 $meta3 = EasyRdfUtil::cloneResource($meta);
 $meta3->addResource($relProp, $id1);
@@ -118,7 +128,8 @@ $meta3->addResource($relProp, $id2);
 $res3 = $fedora->createResource($meta3);
 $fedora->commit();
 
-// single relation in single transaction
+##########
+echo "single relation in single transaction\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $id1 = $res1->getId();
@@ -130,7 +141,8 @@ $meta3->addResource($relProp, $id2);
 $res3 = $fedora->createResource($meta3);
 $fedora->commit();
 
-// single transaction with the parent id change
+##########
+echo "single transaction with the parent id change\n";
 $fedora->begin();
 $res1 = $fedora->createResource($meta);
 $meta1 = $res1->getMetadata();
