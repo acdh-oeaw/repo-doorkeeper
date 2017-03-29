@@ -26,6 +26,6 @@
 
 require_once '../vendor/autoload.php';
 
-//include 'deleteTest.php';
-//include 'idTest.php';
+include 'deleteTest.php';
+include 'idTest.php';
 include 'relTest.php';

@@ -42,7 +42,6 @@ $res = new FedoraResource($fedora, $fedora->sanitizeUri($res->getUri()));
 $res->delete();
 $fedora->commit();
 
-
 ##########
 echo "references to deleted resource are checked\n";
 $fedora->begin();
@@ -65,4 +64,3 @@ try {
         throw $e;
     }
 }
-

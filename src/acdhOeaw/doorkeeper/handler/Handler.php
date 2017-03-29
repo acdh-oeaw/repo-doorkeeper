@@ -328,8 +328,8 @@ class Handler {
     }
 
     static private function checkOrphanedRelProp($delUri, array $delUris, Doorkeeper $d) {
-        $delUri = EasyRdfUtil::escapeUri($d->getDeletedResourceId($delUri));
-        $query = sprintf('SELECT ?res WHERE {?res ?prop %s}', $delUri);
+        $delId = EasyRdfUtil::escapeUri($d->getDeletedResourceId($delUri));
+        $query = sprintf('SELECT DISTINCT ?res WHERE {?res ?prop %s}', $delId);
         $orphans = $d->getFedora()->runSparql($query);
         foreach ($orphans as $i) {
             if (!in_array($i->res, $delUris)) {
