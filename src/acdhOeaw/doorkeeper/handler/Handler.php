@@ -224,10 +224,10 @@ class Handler {
 
         // no ACDH id (and not part of the ontology) - generate one
         if ($acdhIdCount == 0 && !$ontologyPart) {
-            $d->log("  no ACDH id - generating one");
             do {
                 $id = $namespace . UUID::v4();
-            } while (self::checkIfIdExists($id, $txRes, $delUris, $d));
+            } while (self::checkIfIdExists($id, $txRes, array(), $d));
+            $d->log("  no ACDH id - assigned " . $id);
 
             $metadata->addResource($prop, $id);
             $res->setMetadata($metadata);
@@ -286,7 +286,7 @@ class Handler {
             $id = trim($i->getUri());
 
             if (!(strpos($id, $idNmsp) === 0)) {
-                throw new LogicException("fedoraRelProp in a wrong namespace");
+                throw new LogicException("fedoraRelProp in a wrong namespace " . $id . ' ' . $idNmsp);
             }
 
             if ($id === $resId) {
