@@ -250,9 +250,10 @@ class Handler {
             $uri = $res->getId();
             $ps = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
             $pid = $ps->create($uri);
+            $pid = str_replace($d->getConfig('epicUrl'), $d->getConfig('epicResolver'), $pid);
             $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
 
-            $metadata->add($pidProp, $pid);
+            $metadata->addResource($pidProp, $pid);
             $res->setMetadata($metadata);
             $res->updateMetadata();
         }
