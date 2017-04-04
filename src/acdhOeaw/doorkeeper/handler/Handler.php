@@ -247,9 +247,10 @@ class Handler {
         if ($metadata->getLiteral($pidProp) !== null) {
             $metadata->delete($pidProp);
 
-            $uri = $metadata->getResource($d->getConfig('fedoraIdProp'))->getUri();
+            $uri = $res->getId();
             $ps = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
             $pid = $ps->create($uri);
+            $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
 
             $metadata->add($pidProp, $pid);
             $res->setMetadata($metadata);
