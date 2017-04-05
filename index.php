@@ -13,6 +13,11 @@ RdfNamespace::set('dct', 'http://purl.org/dc/terms/');
 
 $config = new Config('config.ini');
 
+if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])) {
+    $_SERVER['PHP_AUTH_USER'] = 'user';
+    $_SERVER['PHP_AUTH_PW'] = $config->get('fedoraUserPswd');
+}
+
 $dbFile = 'db.sqlite';
 $initDb = !file_exists($dbFile);
 $pdo = new PDO('sqlite:' . $dbFile);
