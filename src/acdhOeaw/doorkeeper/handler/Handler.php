@@ -183,7 +183,7 @@ class Handler {
             $id = $id->getUri();
 
             // ACDH ids
-            if (strpos($id, $d->getConfig('fedoraIdNamespace')) === 0) {
+            if (strpos($id, $namespace) === 0) {
                 $acdhIdCount++;
 
                 // only one id in ACDH namespace allowed
@@ -198,7 +198,7 @@ class Handler {
                 $query->addParameter(new HasTriple($uri, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', '?a'));
                 $query->addParameter((new HasTriple($uri, $d->getConfig('fedoraIdProp'), '?id'))->setOptional(true));
                 $result = $d->getFedora()->runQuery($query);
-                if (count($result) > 0 && $result[0]->id != $id) {
+                if (count($result) > 0 && strpos($result[0]->id, $namespace) === 0 && $result[0]->id != $id) {
                     throw new LogicException("fedoraIdProp changed from " . $result[0]->id . ' to ' . $id);
                 }
             }
