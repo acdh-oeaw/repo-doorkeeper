@@ -56,7 +56,7 @@ class Handler {
     static public function checkTransaction(array $modResources, Doorkeeper $d) {
         $d->log("transaction commit handler for: " . $d->getTransactionId());
 
-        $delUris = array();
+        $delUris   = array();
         $resources = array();
         foreach ($modResources as $i) {
             try {
@@ -134,7 +134,7 @@ class Handler {
     }
 
     static private function getPath(string $uri, Doorkeeper $d): string {
-        $tx = $d->getTransactionId();
+        $tx  = $d->getTransactionId();
         $pos = strpos($uri, $tx);
         if ($pos === false) {
             throw new RuntimeException('transaction id not found in the URI');
@@ -142,42 +142,75 @@ class Handler {
         return substr($uri, $pos + strlen($tx));
     }
 
+    /**
+     * Every resource must have a title-like property.
+     * If such property is found, it is copied as the cfg:fedoraTitleProp.
+     * If not, an error is thrown.
+     * 
+     * @param FedoraResource $res
+     * @param Doorkeeper $d
+     * @throws LogicException
+     */
     static private function checkTitleProp(FedoraResource $res, Doorkeeper $d) {
+        $searchProps = array(
+            'http://purl.org/dc/elements/1.1/title',
+            'http://purl.org/dc/terms/title',
+            'http://www.w3.org/2004/02/skos/core#prefLabel',
+            'http://www.w3.org/2000/01/rdf-schema#label',
+            'http://xmlns.com/foaf/0.1/name',
+        );
+        $titleProp   = $d->getConfig('fedoraTitleProp');
+
         $metadata = $res->getMetadata();
-        $ontologyLoc = $d->getConfig('doorkeeperOntologyLocation');
-        $resLoc = self::getPath($res->getUri(), $d);
-        if (strpos($resLoc, $ontologyLoc) === 0) {
-            $titleProp = $d->getConfig('doorkeeperOntologyLabelProp');
-        } else {
-            $titleProp = $d->getConfig('fedoraTitleProp');
-        }
 
         $titles = $metadata->allLiterals($titleProp);
-
-        // property is missing
-        if (count($titles) == 0) {
-            throw new LogicException("fedoraTitleProp is missing");
-        }
-
-        // more the one property
         if (count($titles) > 1) {
             throw new LogicException("more than one fedoraTitleProp");
-        } else if (trim($titles[0]) == '') {
-            throw new LogicException("fedoraTitleProp value is empty");
+        } elseif (count($titles) == 1) {
+            if (trim($titles[0]) === '') {
+                throw new LogicException("fedoraTitleProp value is empty");
+            } else {
+                return;
+            }
         }
+
+        // no direct hit - search for candidates
+        foreach ($searchProps as $prop) {
+            $matches = $metadata->allLiterals($prop);
+            if (count($matches) > 0 && trim($matches[0]) !== '') {
+                $metadata->addLiteral($titleProp, $matches[0]);
+                $res->setMetadata($metadata);
+                $res->updateMetadata();
+                return;
+            }
+        }
+
+        // special case - foaf:givenName and foaf:familyName
+        $given  = $metadata->getLiteral('http://xmlns.com/foaf/0.1/givenName');
+        $family = $metadata->getLiteral('http://xmlns.com/foaf/0.1/familyName');
+        $title  = trim($given . ' ' . $family);
+        if ($title !== '') {
+            $metadata->addLiteral($titleProp, $title);
+            $res->setMetadata($metadata);
+            $res->updateMetadata();
+            return;
+        }
+
+        throw new LogicException("fedoraTitleProp is missing");
     }
 
-    static private function checkIdProp(FedoraResource $res, array $txRes, array $delUris, Doorkeeper $d) {
-        $prop = $d->getConfig('fedoraIdProp');
-        $namespace = $d->getConfig('fedoraIdNamespace');
+    static private function checkIdProp(FedoraResource $res, array $txRes,
+                                        array $delUris, Doorkeeper $d) {
+        $prop         = $d->getConfig('fedoraIdProp');
+        $namespace    = $d->getConfig('fedoraIdNamespace');
         $ontologyPart = $d->isOntologyPart($res->getUri());
-        $metadata = $res->getMetadata();
+        $metadata     = $res->getMetadata();
 
         if (count($metadata->allLiterals($prop)) > 0) {
             throw new LogicException("fedoraIdProp is a literal");
         }
 
-        $ids = $metadata->allResources($prop);
+        $ids         = $metadata->allResources($prop);
         $acdhIdCount = 0;
         foreach ($ids as $id) {
             $id = $id->getUri();
@@ -193,8 +226,8 @@ class Handler {
 
                 // ACDH id is immutable (can not be changed)
                 // (we can compare it only to the state before transaction as changes within transaction are not saved anywhere)
-                $uri = $res->getUri(true);
-                $query = (new Query())->setDistinct(true)->setSelect(array('?id'));
+                $uri    = $res->getUri(true);
+                $query  = (new Query())->setDistinct(true)->setSelect(array('?id'));
                 $query->addParameter(new HasTriple($uri, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', '?a'));
                 $query->addParameter((new HasTriple($uri, $d->getConfig('fedoraIdProp'), '?id'))->setOptional(true));
                 $result = $d->getFedora()->runQuery($query);
@@ -248,7 +281,7 @@ class Handler {
             $metadata->delete($pidProp);
 
             $uri = $res->getId();
-            $ps = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
+            $ps  = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
             $pid = $ps->create($uri);
             $pid = str_replace($d->getConfig('epicUrl'), $d->getConfig('epicResolver'), $pid);
             $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
@@ -259,9 +292,10 @@ class Handler {
         }
     }
 
-    static private function checkIdRef(FedoraResource $res, array $txRes, array $delUris, Doorkeeper $d) {
+    static private function checkIdRef(FedoraResource $res, array $txRes,
+                                       array $delUris, Doorkeeper $d) {
         $idNmsp = $d->getConfig('fedoraIdNamespace');
-        $meta = $res->getMetadata();
+        $meta   = $res->getMetadata();
 
         foreach ($meta->propertyUris() as $prop) {
             foreach ($meta->allResources($prop) as $uri) {
@@ -273,11 +307,12 @@ class Handler {
         }
     }
 
-    static private function checkRelProp(FedoraResource $res, array $txRes, array $delUris, Doorkeeper $d) {
-        $prop = $d->getConfig('fedoraRelProp');
-        $idNmsp = $d->getConfig('fedoraIdNamespace');
+    static private function checkRelProp(FedoraResource $res, array $txRes,
+                                         array $delUris, Doorkeeper $d) {
+        $prop     = $d->getConfig('fedoraRelProp');
+        $idNmsp   = $d->getConfig('fedoraIdNamespace');
         $metadata = $res->getMetadata();
-        $resId = $d->isOntologyPart($res->getUri()) ? null : $res->getId();
+        $resId    = $d->isOntologyPart($res->getUri()) ? null : $res->getId();
 
         if (count($metadata->allLiterals($prop)) > 0) {
             throw new LogicException("fedoraRelProp is a literal");
@@ -301,7 +336,8 @@ class Handler {
         }
     }
 
-    static private function checkIfIdExists(string $uri, array $resources, array $delUris, Doorkeeper $d) {
+    static private function checkIfIdExists(string $uri, array $resources,
+                                            array $delUris, Doorkeeper $d) {
         $validNamespace = $d->getConfig('fedoraIdNamespace');
         if (strpos($uri, $validNamespace) !== 0) {
             return true; // resource outside our repository, we believe it exists
@@ -329,9 +365,10 @@ class Handler {
         return false;
     }
 
-    static private function checkOrphanedRelProp($delUri, array $delUris, Doorkeeper $d) {
-        $delId = EasyRdfUtil::escapeUri($d->getDeletedResourceId($delUri));
-        $query = sprintf('SELECT DISTINCT ?res WHERE {?res ?prop %s}', $delId);
+    static private function checkOrphanedRelProp($delUri, array $delUris,
+                                                 Doorkeeper $d) {
+        $delId   = EasyRdfUtil::escapeUri($d->getDeletedResourceId($delUri));
+        $query   = sprintf('SELECT DISTINCT ?res WHERE {?res ?prop %s}', $delId);
         $orphans = $d->getFedora()->runSparql($query);
         foreach ($orphans as $i) {
             if (!in_array($i->res, $delUris)) {
