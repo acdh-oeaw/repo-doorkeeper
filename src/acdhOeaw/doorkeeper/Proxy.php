@@ -33,12 +33,18 @@ class Proxy {
         if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
             $authHeader = 'Basic ' . base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
         }
+        
         $contentType = filter_input(INPUT_SERVER, 'HTTP_CONTENT_TYPE');
         $contentType = $contentType ? $contentType : filter_input(INPUT_SERVER, 'CONTENT_TYPE');
+        
+        $contentDisposition = filter_input(INPUT_SERVER, 'HTTP_CONTENT_DISPOSITION');
+        $contentDisposition = $contentDisposition ? $contentDisposition : filter_input(INPUT_SERVER, 'CONTENT_DISPOSITION');
+            
         $headers = array(
             'Authorization' => $authHeader,
             'Accept' => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
-            'Content-Type' => $contentType
+            'Content-Type' => $contentType,
+            'Content-Disposition' => $contentDisposition,
         );
 
         $method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
