@@ -199,6 +199,28 @@ class Handler {
         throw new LogicException("fedoraTitleProp is missing");
     }
 
+    /**
+     * Every resource must have:
+     * 
+     * - Exactly one ACDH repo ID - either a random URI in 
+     *   the cfg:fedoraIdNamespace or an immutable URI in 
+     *   the cfg:fedoraVocabsNamespace.
+     *   If it does not, a random URI is automatically generated.
+     * - At least one non-ACDH repo ID or an immutable URI in
+     *   the cfg:fedoraVocabsNamespace.
+     *   This is because random ACDH repo IDs are random. Therefore it is
+     *   very unlikely anyone knows them and uses them in the resources'
+     *   metadata which causes a serious risk of generating new ACDH repo ID
+     *   on every ingestion.
+     * 
+     * Obviosuly all ID values must be unique.
+     * 
+     * @param FedoraResource $res
+     * @param array $txRes
+     * @param array $delUris
+     * @param Doorkeeper $d
+     * @throws LogicException
+     */
     static private function checkIdProp(FedoraResource $res, array $txRes,
                                         array $delUris, Doorkeeper $d) {
         $prop         = $d->getConfig('fedoraIdProp');
@@ -270,6 +292,9 @@ class Handler {
         // part of the ontology - exactly one id required
         if ($ontologyPart && count($ids) !== 1) {
             throw new LogicException('ontology resources must have exactly one fedoraIdProp triple');
+        }
+        if (!$ontologyPart && count($ids) - $acdhIdCount == 0) {
+            throw new LogicException('non-ontology resources must have at least one "non-ACDH id" identifier');
         }
     }
 
