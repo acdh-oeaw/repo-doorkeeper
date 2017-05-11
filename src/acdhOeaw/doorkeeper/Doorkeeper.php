@@ -15,7 +15,7 @@ use LogicException;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
-use zozlak\util\Config;
+use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
 
@@ -56,7 +56,6 @@ class Doorkeeper {
         return null;
     }
 
-    private $cfg;
     private $baseUrl;
     private $proxyBaseUrl;
     private $transactionId;
@@ -71,15 +70,14 @@ class Doorkeeper {
     private $postEditHandlers = array();
     private $logFile;
 
-    public function __construct(Config $cfg, PDO $pdo) {
+    public function __construct(PDO $pdo) {
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
         $this->proxy = new Proxy();
         $this->fedora = new Fedora($cfg);
         $this->pdo = $pdo;
-        $this->cfg = $cfg;
 
-        $this->baseUrl = preg_replace('|/$|', '', $cfg->get('doorkeeperBaseUrl')) . '/';
-        $this->proxyBaseUrl = substr(preg_replace('|/$|', '', $cfg->get('fedoraApiUrl')) . '/', 0, -strlen($this->baseUrl) + 1);
+        $this->baseUrl = preg_replace('|/$|', '', RC::get('doorkeeperBaseUrl')) . '/';
+        $this->proxyBaseUrl = substr(preg_replace('|/$|', '', RC::get('fedoraApiUrl')) . '/', 0, -strlen($this->baseUrl) + 1);
 
         $reqUri = filter_input(INPUT_SERVER, 'REQUEST_URI');
         if (!preg_match('|^' . $this->baseUrl . '|', $reqUri)) {
@@ -102,21 +100,17 @@ class Doorkeeper {
             }
         }
 
-        if ($cfg->get('doorkeeperDefaultUserPswd') && !isset($_SERVER['PHP_AUTH_USER'])) {
-            $credentials = explode(':', $cfg->get('doorkeeperDefaultUserPswd'));
+        if (RC::get('doorkeeperDefaultUserPswd') && !isset($_SERVER['PHP_AUTH_USER'])) {
+            $credentials = explode(':', RC::get('doorkeeperDefaultUserPswd'));
             $_SERVER['PHP_AUTH_USER'] = $credentials[0];
             $_SERVER['PHP_AUTH_PW'] = $credentials[1];
         }
 
-        $this->logFile = fopen($this->cfg->get('doorkeeperLogFile'), 'a');
+        $this->logFile = fopen(RC::get('doorkeeperLogFile'), 'a');
     }
 
     public function __destruct() {
         fclose($this->logFile);
-    }
-
-    public function getConfig($prop) {
-        return $this->cfg->get($prop);
     }
 
     public function getProxyBaseUrl(): string {
@@ -162,7 +156,7 @@ class Doorkeeper {
 
     public function isOntologyPart(string $uri): bool {
         $uri = $this->fedora->sanitizeUri($uri);
-        $ontology = $this->fedora->sanitizeUri($this->cfg->get('doorkeeperOntologyLocation'));
+        $ontology = $this->fedora->sanitizeUri(RC::get('doorkeeperOntologyLocation'));
         return strpos($uri, $ontology) === 0;
     }
 

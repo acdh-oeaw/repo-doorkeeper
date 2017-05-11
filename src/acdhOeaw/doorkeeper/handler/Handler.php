@@ -31,8 +31,9 @@ use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
+use acdhOeaw\fedora\metadataQuery\QueryParameter;
 use acdhOeaw\epicHandle\HandleService;
-use acdhOeaw\util\EasyRdfUtil;
+use acdhOeaw\util\RepoConfig as RC;
 use RuntimeException;
 use LogicException;
 use GuzzleHttp\Exception\RequestException;
@@ -159,7 +160,7 @@ class Handler {
             'http://www.w3.org/2000/01/rdf-schema#label',
             'http://xmlns.com/foaf/0.1/name',
         );
-        $titleProp   = $d->getConfig('fedoraTitleProp');
+        $titleProp   = RC::titleProp();
 
         $metadata = $res->getMetadata();
 
@@ -223,8 +224,8 @@ class Handler {
      */
     static private function checkIdProp(FedoraResource $res, array $txRes,
                                         array $delUris, Doorkeeper $d) {
-        $prop         = $d->getConfig('fedoraIdProp');
-        $namespace    = $d->getConfig('fedoraIdNamespace');
+        $prop         = RC::idProp();
+        $namespace    = RC::idNmsp();
         $ontologyPart = $d->isOntologyPart($res->getUri());
         $metadata     = $res->getMetadata();
 
@@ -251,7 +252,7 @@ class Handler {
                 $uri    = $res->getUri(true);
                 $query  = (new Query())->setDistinct(true)->setSelect(array('?id'));
                 $query->addParameter(new HasTriple($uri, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', '?a'));
-                $query->addParameter((new HasTriple($uri, $d->getConfig('fedoraIdProp'), '?id'))->setOptional(true));
+                $query->addParameter((new HasTriple($uri, RC::idProp(), '?id'))->setOptional(true));
                 $result = $d->getFedora()->runQuery($query);
                 if (count($result) > 0 && strpos($result[0]->id, $namespace) === 0 && $result[0]->id != $id) {
                     throw new LogicException("fedoraIdProp changed from " . $result[0]->id . ' to ' . $id);
@@ -299,16 +300,16 @@ class Handler {
     }
 
     static private function generatePid(FedoraResource $res, Doorkeeper $d) {
-        $pidProp = $d->getConfig('epicPidProp');
+        $pidProp = RC::get('epicPidProp');
 
         $metadata = $res->getMetadata();
         if ($metadata->getLiteral($pidProp) !== null) {
             $metadata->delete($pidProp);
 
             $uri = $res->getId();
-            $ps  = new HandleService($d->getConfig('epicUrl'), $d->getConfig('epicPrefix'), $d->getConfig('epicUser'), $d->getConfig('epicPswd'));
+            $ps  = new HandleService(RC::get('epicUrl'), RC::get('epicPrefix'), RC::get('epicUser'), RC::get('epicPswd'));
             $pid = $ps->create($uri);
-            $pid = str_replace($d->getConfig('epicUrl'), $d->getConfig('epicResolver'), $pid);
+            $pid = str_replace(RC::get('epicUrl'), RC::get('epicResolver'), $pid);
             $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
 
             $metadata->addResource($pidProp, $pid);
@@ -319,7 +320,7 @@ class Handler {
 
     static private function checkIdRef(FedoraResource $res, array $txRes,
                                        array $delUris, Doorkeeper $d) {
-        $idNmsp = $d->getConfig('fedoraIdNamespace');
+        $idNmsp = RC::idNmsp();
         $meta   = $res->getMetadata();
 
         foreach ($meta->propertyUris() as $prop) {
@@ -334,8 +335,8 @@ class Handler {
 
     static private function checkRelProp(FedoraResource $res, array $txRes,
                                          array $delUris, Doorkeeper $d) {
-        $prop     = $d->getConfig('fedoraRelProp');
-        $idNmsp   = $d->getConfig('fedoraIdNamespace');
+        $prop     = RC::relProp();
+        $idNmsp   = RC::idNmsp();
         $metadata = $res->getMetadata();
         $resId    = $d->isOntologyPart($res->getUri()) ? null : $res->getId();
 
@@ -363,7 +364,7 @@ class Handler {
 
     static private function checkIfIdExists(string $uri, array $resources,
                                             array $delUris, Doorkeeper $d) {
-        $validNamespace = $d->getConfig('fedoraIdNamespace');
+        $validNamespace = RC::idNmsp();
         if (strpos($uri, $validNamespace) !== 0) {
             return true; // resource outside our repository, we believe it exists
         }
@@ -392,7 +393,7 @@ class Handler {
 
     static private function checkOrphanedRelProp($delUri, array $delUris,
                                                  Doorkeeper $d) {
-        $delId   = EasyRdfUtil::escapeUri($d->getDeletedResourceId($delUri));
+        $delId   = QueryParameter::escapeUri($d->getDeletedResourceId($delUri));
         $query   = sprintf('SELECT DISTINCT ?res WHERE {?res ?prop %s}', $delId);
         $orphans = $d->getFedora()->runSparql($query);
         foreach ($orphans as $i) {

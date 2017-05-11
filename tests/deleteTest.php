@@ -10,18 +10,18 @@
 
 require_once '../vendor/autoload.php';
 
-use zozlak\util\Config;
 use acdhOeaw\fedora\Fedora;
 use acdhOeaw\fedora\FedoraResource;
-use acdhOeaw\util\EasyRdfUtil;
+use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-$cfg = new Config('config.ini');
-$fedora = new Fedora($cfg);
-$idProp = $cfg->get('fedoraIdProp');
+RC::init('config.ini');
+$fedora = new Fedora();
+$idProp = RC::idProp();
 $meta = (new Graph())->resource('.');
-$meta->addLiteral($cfg->get('fedoraTitleProp'), 'test resource');
+$meta->addLiteral(RC::titleProp(), 'test resource');
+$meta->addResource($idProp, 'http://random.id/' . rand());
 
 
 ##########
@@ -49,6 +49,7 @@ $res1 = $fedora->createResource($meta);
 $meta2 = $res1->getMetadata();
 $meta2->delete($idProp);
 $meta2->addResource('https://my.ow/property', $res1->getId());
+$meta2->addResource($idProp, 'http://random.id/' . rand());
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize

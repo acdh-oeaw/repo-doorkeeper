@@ -8,23 +8,23 @@
 
 require_once '../vendor/autoload.php';
 
-use zozlak\util\Config;
 use acdhOeaw\fedora\Fedora;
-use acdhOeaw\util\EasyRdfUtil;
+use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-$cfg = new Config('config.ini');
-$fedora = new Fedora($cfg);
-$idProp = EasyRdfUtil::fixPropName($cfg->get('fedoraIdProp'));
-$relProp = EasyRdfUtil::fixPropName($cfg->get('fedoraRelProp'));
+RC::init('config.ini');
+$fedora = new Fedora();
+$idProp = RC::idProp();
+$relProp = RC::relProp();
 $meta = (new Graph())->resource('.');
-$meta->addLiteral($cfg->get('fedoraTitleProp'), 'test resource');
+$meta->addLiteral(RC::titleProp(), 'test resource');
 
 ##########
 echo "relation property must be a resource\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
 $meta1->addLiteral($relProp, 'http://my.value/123');
 $fedora->createResource($meta1);
 try {
@@ -40,7 +40,8 @@ try {
 ##########
 echo "relation property must be in the ACDH id namespace\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
 $meta1->addResource($relProp, 'http://my.value/123');
 $fedora->createResource($meta1);
 try {
@@ -56,7 +57,9 @@ try {
 ##########
 echo "relation property can not point to the resource itself\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $meta1 = $res1->getMetadata();
 $meta1->addResource($relProp, $res1->getId());
 $res1->setMetadata($meta1);
@@ -74,9 +77,11 @@ try {
 ##########
 echo "relation can not point to an unexisting resource\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $meta1 = $res1->getMetadata();
-$meta1->addResource($relProp, $cfg->get('fedoraIdNamespace') . 'non-existing-resource');
+$meta1->addResource($relProp, RC::idNmsp() . 'non-existing-resource');
 $res1->setMetadata($meta1);
 $res1->updateMetadata();
 try {
@@ -92,12 +97,15 @@ try {
 ##########
 echo "single relation in separate transactions\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $id1 = $res1->getId();
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
 $fedora->begin();
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
+$meta2->addResource($idProp, 'http://random.id/' . rand());
 $meta2->addResource($relProp, $id1);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
@@ -105,9 +113,12 @@ $fedora->commit();
 ##########
 echo "single relation in single transaction\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $id1 = $res1->getId();
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
+$meta2->addResource($idProp, 'http://random.id/' . rand());
 $meta2->addResource($relProp, $id1);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
@@ -115,14 +126,19 @@ $fedora->commit();
 ##########
 echo "many relations in separate transactions\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $id1 = $res1->getId();
-$res2 = $fedora->createResource($meta);
+$meta2 = $meta->copy();
+$meta2->addResource($idProp, 'http://random.id/' . rand());
+$res2 = $fedora->createResource($meta2);
 $id2 = $res2->getId();
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
 $fedora->begin();
-$meta3 = EasyRdfUtil::cloneResource($meta);
+$meta3 = $meta->copy();
+$meta3->addResource($idProp, 'http://random.id/' . rand());
 $meta3->addResource($relProp, $id1);
 $meta3->addResource($relProp, $id2);
 $res3 = $fedora->createResource($meta3);
@@ -131,27 +147,37 @@ $fedora->commit();
 ##########
 echo "single relation in single transaction\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $id1 = $res1->getId();
-$res2 = $fedora->createResource($meta);
+$meta2 = $meta->copy();
+$meta2->addResource($idProp, 'http://random.id/' . rand());
+$res2 = $fedora->createResource($meta2);
 $id2 = $res2->getId();
-$meta3 = EasyRdfUtil::cloneResource($meta);
+$meta3 = $meta->copy();
+$meta3->addResource($idProp, 'http://random.id/' . rand());
 $meta3->addResource($relProp, $id1);
 $meta3->addResource($relProp, $id2);
 $res3 = $fedora->createResource($meta3);
 $fedora->commit();
 
+
 ##########
 echo "single transaction with the parent id change\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$res1 = $fedora->createResource($meta1);
 $meta1 = $res1->getMetadata();
 $meta1->delete($idProp);
-$id1 = $cfg->get('fedoraIdNamespace') . rand();
+$meta1->addResource($idProp, 'http://random.id/' . rand());
+$id1 = RC::idNmsp() . rand();
 $meta1->addResource($idProp, $id1);
 $res1->setMetadata($meta1);
 $res1->updateMetadata();
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
+$meta2->addResource($idProp, 'http://random.id/' . rand());
 $meta2->addResource($relProp, $id1);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();

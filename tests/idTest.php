@@ -8,23 +8,22 @@
 
 require_once '../vendor/autoload.php';
 
-use zozlak\util\Config;
 use acdhOeaw\fedora\Fedora;
-use acdhOeaw\util\EasyRdfUtil;
+use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-$cfg = new Config('config.ini');
-$fedora = new Fedora($cfg);
-$idProp = $cfg->get('fedoraIdProp');
-$idNmsp = $cfg->get('fedoraIdNamespace');
+RC::init('config.ini');
+$fedora = new Fedora();
+$idProp = RC::idProp();
+$idNmsp = RC::idNmsp();
 $meta = (new Graph())->resource('.');
-$meta->addLiteral($cfg->get('fedoraTitleProp'), 'test resource');
+$meta->addLiteral(RC::titleProp(), 'test resource');
 
 ##########
 echo "id is assigned automatically\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, 'http://my.namespace/id');
 $res1 = $fedora->createResource($meta1);
 $res1->getId();
@@ -36,7 +35,7 @@ $fedora->rollback();
 ##########
 echo "non-ontology resources must have at least one 'non-ACDH id' identifier\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 try {
     $fedora->createResource($meta1);
     throw new Exception('no error');
@@ -51,7 +50,7 @@ $fedora->rollback();
 ##########
 echo "only one ACDH id is allowed\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, $idNmsp . 'a' . rand());
 $meta1->addResource($idProp, $idNmsp . 'b' . rand());
 try {
@@ -68,8 +67,8 @@ $fedora->rollback();
 ##########
 echo "id can not be literal\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
-$meta1->addLiteral($idProp, $cfg->get('fedoraIdNamespace') . rand());
+$meta1 = $meta->copy();
+$meta1->addLiteral($idProp, RC::idNmsp() . rand());
 try {
     $fedora->createResource($meta1);
     throw new Exception('no error');
@@ -84,12 +83,12 @@ $fedora->rollback();
 ##########
 echo "id in ACDH namespace duplicated between transactions\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
 $meta2->addResource($idProp, 'https://some.random/id/b' . rand());
 $meta2->addResource($idProp, $res1->getId());
 $fedora->begin();
@@ -107,10 +106,10 @@ $fedora->rollback();
 ##########
 echo "id in ACDH namespace duplicated within transaction\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
 $meta2->addResource($idProp, 'https://some.random/id/b' . rand());
 $meta2->addResource($idProp, $res1->getId());
 $res2 = $fedora->createResource($meta2);
@@ -128,12 +127,12 @@ try {
 echo "id outside of ACDH namespace duplicated between transactions\n";
 $id = 'https://some.random/id/a' . rand();
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, $id);
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
 $meta2->addResource($idProp, $id);
 $fedora->begin();
 try {
@@ -149,7 +148,7 @@ try {
 ##########
 echo "it is not a problem to modify the same resource more than once within a transaction and even id can be changed\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $meta1 = $res1->getMetadata();
@@ -166,7 +165,7 @@ $fedora->commit();
 ##########
 echo "ACDH id of an existing resource can not be changed\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
@@ -192,23 +191,23 @@ $fedora->rollback();
 ##########
 echo "any property with an object being ACDH URI in the id namespace must resolve to an existing resource\n";
 $fedora->begin();
-$meta1 = EasyRdfUtil::cloneResource($meta);
+$meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
 $id = $res1->getId();
 $fedora->begin();
-$meta2 = EasyRdfUtil::cloneResource($meta);
+$meta2 = $meta->copy();
 $meta2->addResource($idProp, 'https://some.random/id/b' . rand());
 $meta2->addResource('http://my.own/property', $id);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
 $fedora->begin();
-$meta3 = EasyRdfUtil::cloneResource($meta);
+$meta3 = $meta->copy();
 $meta3->addResource($idProp, 'https://some.random/id/c' . rand());
-$meta3->addResource('http://my.own/property', $cfg->get('fedoraIdNamespace') . 'non-existing-resource');
+$meta3->addResource('http://my.own/property', RC::idNmsp() . 'non-existing-resource');
 $res3 = $fedora->createResource($meta3);
 try {
     $fedora->commit();

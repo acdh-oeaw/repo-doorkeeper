@@ -5,13 +5,13 @@ require_once __DIR__ . '/vendor/autoload.php';
 use zozlak\util\Config;
 use zozlak\util\ClassLoader;
 use acdhOeaw\doorkeeper\Doorkeeper;
-use acdhOeaw\doorkeeper\handler\Handler;
+use acdhOeaw\util\RepoConfig as RC;
 use EasyRdf\RdfNamespace;
 
 $cl = new ClassLoader();
 RdfNamespace::set('dct', 'http://purl.org/dc/terms/');
 
-$config = new Config('config.ini');
+RC::init('config.ini');
 
 if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])) {
     $_SERVER['PHP_AUTH_USER'] = 'user';
@@ -26,7 +26,7 @@ if ($initDb) {
     Doorkeeper::initDb($pdo);
 }
 
-$doorkeeper = new Doorkeeper($config, $pdo);
+$doorkeeper = new Doorkeeper($pdo);
 $doorkeeper->registerCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkTransaction');
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
 $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
