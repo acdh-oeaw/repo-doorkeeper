@@ -73,7 +73,7 @@ class Doorkeeper {
     public function __construct(PDO $pdo) {
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
         $this->proxy = new Proxy();
-        $this->fedora = new Fedora($cfg);
+        $this->fedora = new Fedora();
         $this->pdo = $pdo;
 
         $this->baseUrl = preg_replace('|/$|', '', RC::get('doorkeeperBaseUrl')) . '/';

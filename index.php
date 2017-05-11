@@ -2,7 +2,6 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use zozlak\util\Config;
 use zozlak\util\ClassLoader;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\util\RepoConfig as RC;
@@ -15,7 +14,7 @@ RC::init('config.ini');
 
 if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])) {
     $_SERVER['PHP_AUTH_USER'] = 'user';
-    $_SERVER['PHP_AUTH_PW'] = $config->get('fedoraUserPswd');
+    $_SERVER['PHP_AUTH_PW'] = RC::get('fedoraUserPswd');
 }
 
 $dbFile = 'db.sqlite';
