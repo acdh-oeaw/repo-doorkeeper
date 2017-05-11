@@ -20,40 +20,43 @@ use GuzzleHttp\Psr7\Request;
 class Proxy {
 
     public function proxy($url): Response {
-        $options = array();
-        $output = fopen('php://output', 'w');
-        $options['sink'] = $output;
+        $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
+        $input  = $method !== 'HEAD' ? fopen('php://input', 'r') : null;
+
+        $options               = array();
+        $output                = fopen('php://output', 'w');
+        $options['sink']       = $output;
         $options['on_headers'] = function(Response $r) {
             $this->handleHeaders($r);
         };
         $options['verify'] = false;
-        $client = new Client($options);
+        $client            = new Client($options);
 
         $authHeader = null;
         if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
             $authHeader = 'Basic ' . base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
         }
-        
+
         $contentType = filter_input(INPUT_SERVER, 'HTTP_CONTENT_TYPE');
         $contentType = $contentType ? $contentType : filter_input(INPUT_SERVER, 'CONTENT_TYPE');
-        
+
         $contentDisposition = filter_input(INPUT_SERVER, 'HTTP_CONTENT_DISPOSITION');
         $contentDisposition = $contentDisposition ? $contentDisposition : filter_input(INPUT_SERVER, 'CONTENT_DISPOSITION');
-            
+
         $headers = array(
-            'Authorization' => $authHeader,
-            'Accept' => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
-            'Content-Type' => $contentType,
+            'Authorization'       => $authHeader,
+            'Accept'              => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
+            'Content-Type'        => $contentType,
             'Content-Disposition' => $contentDisposition,
         );
 
-        $method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
-        $input = fopen('php://input', 'r');
         //print_r([$method, $url, $headers, $input]);
-        $request = new Request($method, $url, $headers, $input);
+        $request  = new Request($method, $url, $headers, $input);
         $response = $client->send($request);
 
-        fclose($input);
+        if ($input) {
+            fclose($input);
+        }
         fclose($output);
 
         return $response;

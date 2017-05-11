@@ -64,36 +64,36 @@ class Doorkeeper {
     private $pdo;
     private $fedora;
     private $proxy;
-    private $pass = false;
-    private $commitHandlers = array();
+    private $pass               = false;
+    private $commitHandlers     = array();
     private $postCreateHandlers = array();
-    private $postEditHandlers = array();
+    private $postEditHandlers   = array();
     private $logFile;
 
     public function __construct(PDO $pdo) {
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
-        $this->proxy = new Proxy();
+        $this->proxy  = new Proxy();
         $this->fedora = new Fedora();
-        $this->pdo = $pdo;
+        $this->pdo    = $pdo;
 
-        $this->baseUrl = preg_replace('|/$|', '', RC::get('doorkeeperBaseUrl')) . '/';
+        $this->baseUrl      = preg_replace('|/$|', '', RC::get('doorkeeperBaseUrl')) . '/';
         $this->proxyBaseUrl = substr(preg_replace('|/$|', '', RC::get('fedoraApiUrl')) . '/', 0, -strlen($this->baseUrl) + 1);
 
         $reqUri = filter_input(INPUT_SERVER, 'REQUEST_URI');
         if (!preg_match('|^' . $this->baseUrl . '|', $reqUri)) {
             // request outside Fedora API
             $this->proxyUrl = $this->proxyBaseUrl . substr($reqUri, 1);
-            $this->pass = true;
+            $this->pass     = true;
         } else {
             $tmp = mb_substr($reqUri, strlen($this->baseUrl));
             if (preg_match('|^tx:[-a-z0-9]+|', $tmp)) {
                 $this->transactionId = preg_replace('|/.*$|', '', $tmp) . '/';
-                $tmp = substr($tmp, strlen($this->transactionId));
+                $tmp                 = substr($tmp, strlen($this->transactionId));
 
                 $this->fedora->setTransactionId(substr($this->proxyBaseUrl . 'rest/' . $this->transactionId, 0, -1));
             }
             $this->resourceId = $tmp;
-            $this->proxyUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . $this->resourceId;
+            $this->proxyUrl   = $this->proxyBaseUrl . 'rest/' . $this->transactionId . $this->resourceId;
 
             if (in_array($this->resourceId, self::$exclResources)) {
                 $this->pass = true;
@@ -101,9 +101,9 @@ class Doorkeeper {
         }
 
         if (RC::get('doorkeeperDefaultUserPswd') && !isset($_SERVER['PHP_AUTH_USER'])) {
-            $credentials = explode(':', RC::get('doorkeeperDefaultUserPswd'));
+            $credentials              = explode(':', RC::get('doorkeeperDefaultUserPswd'));
             $_SERVER['PHP_AUTH_USER'] = $credentials[0];
-            $_SERVER['PHP_AUTH_PW'] = $credentials[1];
+            $_SERVER['PHP_AUTH_PW']   = $credentials[1];
         }
 
         $this->logFile = fopen(RC::get('doorkeeperLogFile'), 'a');
@@ -144,10 +144,10 @@ class Doorkeeper {
     public function getDeletedResourceId(string $uri): string {
         $resourceId = $this->extractResourceId($this->fedora->sanitizeUri($uri));
 
-        $uri = $query = "SELECT acdh_id FROM resources WHERE transaction_id = ? AND resource_id = ?";
+        $uri   = $query = "SELECT acdh_id FROM resources WHERE transaction_id = ? AND resource_id = ?";
         $query = $this->pdo->prepare($query);
         $query->execute(array($this->transactionId, $resourceId));
-        $id = $query->fetch(PDO::FETCH_COLUMN);
+        $id    = $query->fetch(PDO::FETCH_COLUMN);
         if (!$id) {
             throw new RuntimeException('acdh id of ' . $resourceId . ' not found ' . $this->transactionId);
         }
@@ -155,7 +155,7 @@ class Doorkeeper {
     }
 
     public function isOntologyPart(string $uri): bool {
-        $uri = $this->fedora->sanitizeUri($uri);
+        $uri      = $this->fedora->sanitizeUri($uri);
         $ontology = $this->fedora->sanitizeUri(RC::get('doorkeeperOntologyLocation'));
         return strpos($uri, $ontology) === 0;
     }
@@ -180,7 +180,7 @@ class Doorkeeper {
 
     private function handleReadOnly() {
         try {
-            $this->proxy->proxy($this->proxyUrl); // pass request and return results
+            $this->proxy->proxy($this->proxyUrl, $this); // pass request and return results
         } catch (RequestException $e) {
             
         } catch (Exception $e) {
@@ -198,7 +198,7 @@ class Doorkeeper {
     private function handleResourceEdit() {
         $errors = array();
         // so complex to respect primary key when the same resource is modified many times in one transaction
-        $query = $this->pdo->prepare("
+        $query  = $this->pdo->prepare("
             INSERT INTO resources (transaction_id, resource_id, acdh_id) 
             SELECT *
             FROM (SELECT ? AS a, ? AS b, ? AS c) AS t
@@ -208,8 +208,8 @@ class Doorkeeper {
             $acdhId = null;
             if ($this->method === 'DELETE') {
                 try {
-                    $res = $this->fedora->getResourceByUri($this->proxyUrl);
-                    $acdhId = $res->getId();
+                    $res        = $this->fedora->getResourceByUri($this->proxyUrl);
+                    $acdhId     = $res->getId();
                     $resourceId = $this->extractResourceId($this->proxyUrl);
 
                     $updateQuery = $this->pdo->prepare("UPDATE resources SET acdh_id = ? WHERE transaction_id = ? AND resource_id = ?");
@@ -259,10 +259,10 @@ class Doorkeeper {
 
         if ($this->resourceId === 'fcr:tx/fcr:commit') {
             // COMMIT - check resources integrity
-            $query = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
+            $query     = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
             $query->execute(array($this->transactionId));
             $resources = array();
-            while ($i = $query->fetch(PDO::FETCH_OBJ)) {
+            while ($i         = $query->fetch(PDO::FETCH_OBJ)) {
                 $resources[] = $this->fedora->getResourceByUri($i->resource_id);
             }
             foreach ($this->commitHandlers as $i) {
@@ -297,7 +297,7 @@ class Doorkeeper {
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
 
-            $location = $this->parseLocations($response);
+            $location      = $this->parseLocations($response);
             $transactionId = preg_replace('|^.*/([^/]+)|', '\\1', $location) . '/';
 
             if ($response->getStatusCode() === 201 && $transactionId !== $location . '/') {
@@ -324,7 +324,8 @@ class Doorkeeper {
             return false;
         }
 
-        if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'))) {
+        if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT',
+                'PATCH', 'DELETE'))) {
             header('HTTP/1.1 405 Method Not Supported by the doorkeeper');
             return false;
         }
@@ -333,7 +334,7 @@ class Doorkeeper {
     }
 
     private function isTransactionEnd(): bool {
-        $urlMatch = preg_match('#^fcr:tx/fcr:(commit|rollback)$#', $this->resourceId);
+        $urlMatch    = preg_match('#^fcr:tx/fcr:(commit|rollback)$#', $this->resourceId);
         $methodMatch = $this->method === 'POST';
         return $urlMatch && $methodMatch;
     }
@@ -344,7 +345,7 @@ class Doorkeeper {
 
     private function parseLocations(Response $response) {
         $locations = $response->getHeader('Location');
-        $location = count($locations) > 0 ? $locations[0] : '';
+        $location  = count($locations) > 0 ? $locations[0] : '';
         return $location;
     }
 
@@ -356,8 +357,8 @@ class Doorkeeper {
 
     private function sendRequest($method, $url, $headers = array(), $body = null): Response {
         $headers['Authorization'] = self::getAuthHeader();
-        $request = new Request('POST', $url, $headers, $body);
-        $client = new Client();
+        $request                  = new Request('POST', $url, $headers, $body);
+        $client                   = new Client();
         return $client->send($request);
     }
 
@@ -393,7 +394,7 @@ class Doorkeeper {
     /**
      * Writes a message to the doorkeeper log.
      * 
-     * @param type $msg message to write
+     * @param string $msg message to write
      */
     public function log($msg) {
         fwrite($this->logFile, $msg . "\n");
