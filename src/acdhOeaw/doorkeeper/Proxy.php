@@ -11,6 +11,7 @@ namespace acdhOeaw\doorkeeper;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Request;
+use acdhOeaw\util\RepoConfig as RC;
 
 /**
  * Description of Proxy
@@ -32,24 +33,24 @@ class Proxy {
         $options['verify'] = false;
         $client            = new Client($options);
 
-        $authHeader = null;
-        if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
-            $authHeader = 'Basic ' . base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
-        }
-
         $contentType = filter_input(INPUT_SERVER, 'HTTP_CONTENT_TYPE');
         $contentType = $contentType ? $contentType : filter_input(INPUT_SERVER, 'CONTENT_TYPE');
 
         $contentDisposition = filter_input(INPUT_SERVER, 'HTTP_CONTENT_DISPOSITION');
         $contentDisposition = $contentDisposition ? $contentDisposition : filter_input(INPUT_SERVER, 'CONTENT_DISPOSITION');
 
+        $authData = Auth::authenticate();
+        $cfgPrefix = $authData->admin ? '' : 'Guest';
+        $authHeader = Auth::getHttpBasicHeader(RC::get('fedora' . $cfgPrefix . 'User'), RC::get('fedora' . $cfgPrefix . 'Pswd'));
+        
         $headers = array(
             'Authorization'       => $authHeader,
             'Accept'              => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
             'Content-Type'        => $contentType,
             'Content-Disposition' => $contentDisposition,
         );
-
+        $headers[RC::get('fedoraRolesHeader')] = implode(',', $authData->roles);
+        
         //print_r([$method, $url, $headers, $input]);
         $request  = new Request($method, $url, $headers, $input);
         $response = $client->send($request);

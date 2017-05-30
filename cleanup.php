@@ -26,18 +26,11 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use zozlak\util\ClassLoader;
-use acdhOeaw\doorkeeper\Doorkeeper;
-use acdhOeaw\doorkeeper\Auth;
 use acdhOeaw\util\RepoConfig as RC;
-use EasyRdf\RdfNamespace;
 
-$cl = new ClassLoader();
-RdfNamespace::set('dct', 'http://purl.org/dc/terms/');
+RC::init( __DIR__ . '/config.ini');
 
-RC::init('config.ini');
-
-$dbFile = 'db.sqlite';
+$dbFile = __DIR__ . '/db.sqlite';
 $initDb = !file_exists($dbFile);
 $pdo = new PDO('sqlite:' . $dbFile);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -46,9 +39,17 @@ if ($initDb) {
     Auth::initDb($pdo);
 }
 
-$doorkeeper = new Doorkeeper($pdo);
-$doorkeeper->registerCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkTransaction');
-$doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
-$doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
+// clean up the transactions log
+$pdo->query("DELETE FROM resources");
+$pdo->query("DELETE FROM transactions");
 
-$doorkeeper->handleRequest();
+// create an admin user entry
+$user = RC::get('fedoraUser');
+$query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
+$query->execute(array($user));
+$query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+$query->execute(array($user));
+$query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 1)");
+$query->execute(array($user, password_hash(RC::get('fedoraPswd'), PASSWORD_DEFAULT)));
+
+echo "  Doorkeeper database cleanup successful\n";

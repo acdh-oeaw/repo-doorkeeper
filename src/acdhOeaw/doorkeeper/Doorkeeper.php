@@ -71,6 +71,8 @@ class Doorkeeper {
     private $logFile;
 
     public function __construct(PDO $pdo) {
+        Auth::init($pdo);
+        
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
         $this->proxy  = new Proxy();
         $this->fedora = new Fedora();
@@ -98,12 +100,6 @@ class Doorkeeper {
             if (in_array($this->resourceId, self::$exclResources)) {
                 $this->pass = true;
             }
-        }
-
-        if (RC::get('doorkeeperDefaultUserPswd') && !isset($_SERVER['PHP_AUTH_USER'])) {
-            $credentials              = explode(':', RC::get('doorkeeperDefaultUserPswd'));
-            $_SERVER['PHP_AUTH_USER'] = $credentials[0];
-            $_SERVER['PHP_AUTH_PW']   = $credentials[1];
         }
 
         $this->logFile = fopen(RC::get('doorkeeperLogFile'), 'a');
@@ -221,6 +217,8 @@ class Doorkeeper {
                 }
             }
 
+        $authData = Auth::authenticate();
+        $this->log($authData->user . ' ; ' . (int)$authData->admin . ' ; ' . implode(',', $authData->roles));
             $response = $this->proxy->proxy($this->proxyUrl);
             if ($this->method === 'POST' || $response->getStatusCode() == 201) {
                 $resourceId = $this->extractResourceId($this->parseLocations($response));

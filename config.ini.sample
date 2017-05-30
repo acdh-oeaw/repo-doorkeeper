@@ -13,9 +13,16 @@ epicPidProp="https://vocabs.acdh.oeaw.ac.at/#pid"
 
 doorkeeperBaseUrl="/rest/"
 doorkeeperLogFile="log"
-doorkeeperDefaultUserPswd=""
+doorkeeperOntologyLabelProp="http://www.w3.org/2000/01/rdf-schema#label"
+doorkeeperOntologyLocation="ontology"
+doorkeeperShibUserHeader="eppn"
+fedoraRoleHeader="Roles-List"
 sparqlUrl="http://fedora.localhost/blazegraph/sparql"
 
 fedoraApiUrl="http://fedora.localhost/rest"
 fedoraUser="admin"
-fedoraPswd="admin"
+fedoraPswd="***"
+fedoraGuestUser="user"
+fedoraGuestPswd="***"
+fedoraRolesHeader="Roles-List"
+
