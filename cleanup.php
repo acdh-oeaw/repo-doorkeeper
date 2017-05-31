@@ -27,8 +27,12 @@
 require_once __DIR__ . '/vendor/autoload.php';
 
 use acdhOeaw\util\RepoConfig as RC;
+use acdhOeaw\doorkeeper\Doorkeeper;
+use acdhOeaw\doorkeeper\Auth;
+use zozlak\util\ClassLoader;
 
-RC::init( __DIR__ . '/config.ini');
+$cl = new ClassLoader(__DIR__ . '/src');
+RC::init(__DIR__ . '/config.ini');
 
 $dbFile = __DIR__ . '/db.sqlite';
 $initDb = !file_exists($dbFile);
