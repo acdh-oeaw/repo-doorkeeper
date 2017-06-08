@@ -157,6 +157,8 @@ class Doorkeeper {
     }
 
     public function handleRequest() {
+        $authData = Auth::authenticate();
+        $this->log(filter_input(INPUT_SERVER, 'REQUEST_METHOD') . ' ' . $this->proxyUrl . ' ' . $authData->user . '(' . (int)$authData->admin . ';' . implode(',', $authData->roles) . ')');
         if ($this->isMethodReadOnly() || $this->pass) {
             $this->handleReadOnly();
         } else if ($this->resourceId === 'fcr:tx' && $this->method === 'POST') {
@@ -217,8 +219,6 @@ class Doorkeeper {
                 }
             }
 
-        $authData = Auth::authenticate();
-        $this->log($authData->user . ' ; ' . (int)$authData->admin . ' ; ' . implode(',', $authData->roles));
             $response = $this->proxy->proxy($this->proxyUrl);
             if ($this->method === 'POST' || $response->getStatusCode() == 201) {
                 $resourceId = $this->extractResourceId($this->parseLocations($response));
