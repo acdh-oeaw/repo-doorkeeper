@@ -55,7 +55,7 @@ class Handler {
      * @throws \LogicException
      */
     static public function checkTransaction(array $modResources, Doorkeeper $d) {
-        $d->log("transaction commit handler for: " . $d->getTransactionId());
+        $d->log(" transaction commit handler for: " . $d->getTransactionId());
 
         $delUris   = array();
         $resources = array();
@@ -100,7 +100,7 @@ class Handler {
      * @see checkEdit()
      */
     static public function checkCreate(FedoraResource $res, Doorkeeper $d) {
-        $d->log('post create handler for: ' . $res->getUri());
+        $d->log(' post create handler for: ' . $res->getUri());
     }
 
     /**
@@ -118,7 +118,7 @@ class Handler {
      * @throws \LogicException
      */
     static public function checkEdit(FedoraResource $res, Doorkeeper $d) {
-        $d->log('post edit handler for: ' . $d->getMethod() . ' ' . $res->getUri());
+        $d->log(' post edit handler for: ' . $d->getMethod() . ' ' . $res->getUri());
 
         try {
             $res->getMetadata();
@@ -262,7 +262,15 @@ class Handler {
             // every id must be unique
             $matches = array();
             foreach ($d->getFedora()->getResourcesById($id) as $i) {
-                $matches[] = $i->getUri();
+                try {
+                    $i->getMetadata();
+                    // only if resource still exists
+                    $matches[] = $i->getUri();
+                } catch (RequestException $e) {
+                    if ($e->getCode() !== 410) {
+                        throw $e;
+                    }
+                }
             }
             foreach ($txRes as $i) {
                 foreach ($i->getIds() as $j) {
