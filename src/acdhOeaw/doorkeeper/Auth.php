@@ -36,6 +36,7 @@ use acdhOeaw\util\RepoConfig as RC;
  * @author zozlak
  */
 class Auth {
+    const DEFAULT_USER = 'guest';
 
     /**
      * Database connection
@@ -169,7 +170,7 @@ class Auth {
      * User name
      * @var string
      */
-    public $user = 'guest';
+    public $user = self::DEFAULT_USER;
     
     /**
      * All roles user belongs to

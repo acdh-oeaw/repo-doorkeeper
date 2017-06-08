@@ -67,13 +67,23 @@ class Proxy {
         //@TODO for sure this list should be longer!
         static $skipHeaders = array('transfer-encoding', 'host');
 
-        header('HTTP/1.1 ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
-        foreach ($response->getHeaders() as $name => $values) {
-            if (in_array(strtolower($name), $skipHeaders)) {
-                continue;
+        $status = $response->getStatusCode();
+        if (in_array($status, array(401, 403))) {
+            // if credentials were not provided in the original request inform user, they are required
+            $authData = Auth::authenticate();
+            if ($authData->user == Auth::DEFAULT_USER) {
+                header('HTTP/1.1 401 Unauthorized');
+                header('WWW-Authenticate: Basic realm="repository"');
             }
-            foreach ($values as $value) {
-                header(sprintf('%s: %s', $name, $value), false);
+        } else {
+            header('HTTP/1.1 ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
+            foreach ($response->getHeaders() as $name => $values) {
+                if (in_array(strtolower($name), $skipHeaders)) {
+                    continue;
+                }
+                foreach ($values as $value) {
+                    header(sprintf('%s: %s', $name, $value), false);
+                }
             }
         }
     }
