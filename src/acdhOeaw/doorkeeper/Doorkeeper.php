@@ -18,6 +18,7 @@ use GuzzleHttp\Psr7\Response;
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
+use acdhOeaw\fedora\exceptions\Deleted;
 
 /**
  * Description of Doorkeeper
@@ -72,7 +73,7 @@ class Doorkeeper {
 
     public function __construct(PDO $pdo) {
         Auth::init($pdo);
-        
+
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
         $this->proxy  = new Proxy();
         $this->fedora = new Fedora();
@@ -140,7 +141,7 @@ class Doorkeeper {
     public function getDeletedResourceId(string $uri): string {
         $resourceId = $this->extractResourceId($this->fedora->sanitizeUri($uri));
 
-        $uri   = $query = "SELECT acdh_id FROM resources WHERE transaction_id = ? AND resource_id = ?";
+        $query = "SELECT acdh_id FROM resources WHERE transaction_id = ? AND resource_id = ?";
         $query = $this->pdo->prepare($query);
         $query->execute(array($this->transactionId, $resourceId));
         $id    = $query->fetch(PDO::FETCH_COLUMN);
@@ -158,7 +159,7 @@ class Doorkeeper {
 
     public function handleRequest() {
         $authData = Auth::authenticate();
-        $this->log(filter_input(INPUT_SERVER, 'REQUEST_METHOD') . ' ' . $this->proxyUrl . ' ' . $authData->user . '(' . (int)$authData->admin . ';' . implode(',', $authData->roles) . ')');
+        $this->log(filter_input(INPUT_SERVER, 'REQUEST_METHOD') . ' ' . $this->proxyUrl . ' ' . $authData->user . '(' . (int) $authData->admin . ';' . implode(',', $authData->roles) . ')');
         if ($this->isMethodReadOnly() || $this->pass) {
             $this->handleReadOnly();
         } else if ($this->resourceId === 'fcr:tx' && $this->method === 'POST') {
@@ -257,15 +258,22 @@ class Doorkeeper {
 
         if ($this->resourceId === 'fcr:tx/fcr:commit') {
             // COMMIT - check resources integrity
-            $query     = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
+            $query = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
             $query->execute(array($this->transactionId));
-            $resources = array();
-            while ($i         = $query->fetch(PDO::FETCH_OBJ)) {
-                $resources[] = $this->fedora->getResourceByUri($i->resource_id);
+
+            $resources   = array();
+            $deletedUris = array();
+
+            while ($i = $query->fetch(PDO::FETCH_OBJ)) {
+                try {
+                    $resources[] = $this->fedora->getResourceByUri($i->resource_id);
+                } catch (Deleted $e) {
+                    $deletedUris[] = $this->fedora->standardizeUri($i->resource_id);
+                }
             }
             foreach ($this->commitHandlers as $i) {
                 try {
-                    $i($resources, $this);
+                    $i($resources, $deletedUris, $this);
                 } catch (Exception $e) {
                     $errors[] = $e;
                 }
@@ -304,7 +312,7 @@ class Doorkeeper {
             }
         } catch (RequestException $e) {
             
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             
         }
     }

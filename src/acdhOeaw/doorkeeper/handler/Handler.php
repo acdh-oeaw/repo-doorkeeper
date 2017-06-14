@@ -29,6 +29,7 @@ namespace acdhOeaw\doorkeeper\handler;
 use zozlak\util\UUID;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
+use acdhOeaw\fedora\exceptions\NotFound;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\fedora\metadataQuery\QueryParameter;
@@ -51,33 +52,20 @@ class Handler {
      * Any errors found should be reported by throwing a \LogicException.
      * @param array $modResources array of FedoraResource objects being created
      *   or modified in this transaction
+     * @param array $delUris URIs of resources deleted during this transaction
      * @param \acdhOeaw\doorkeeper\Doorkeeper $d the doorkeeper instance
      * @throws \LogicException
      */
-    static public function checkTransaction(array $modResources, Doorkeeper $d) {
+    static public function checkTransaction(array $modResources, array $delUris,
+                                            Doorkeeper $d) {
         $d->log(" transaction commit handler for: " . $d->getTransactionId());
 
-        $delUris   = array();
-        $resources = array();
         foreach ($modResources as $i) {
-            try {
-                $i->getMetadata();
-                $resources[] = $i;
-            } catch (RequestException $e) {
-                if ($e->getCode() === 410) {
-                    $delUris[] = $i->getUri(true);
-                } else {
-                    throw $e;
-                }
-            }
-        }
-
-        foreach ($resources as $i) {
             $d->log('  ' . $i->getUri());
-            self::checkIdProp($i, $resources, $delUris, $d);
+            self::checkIdProp($i, $modResources, $d);
             self::checkTitleProp($i, $d);
-            self::checkRelProp($i, $resources, $delUris, $d);
-            self::checkIdRef($i, $resources, $delUris, $d);
+            self::checkRelProp($i, $modResources, $delUris, $d);
+            self::checkIdRef($i, $modResources, $delUris, $d);
         }
 
         foreach ($delUris as $i) {
@@ -124,7 +112,7 @@ class Handler {
             $res->getMetadata();
 
             // if edit action was not DELETE
-            self::checkIdProp($res, array(), array(), $d);
+            self::checkIdProp($res, array(), $d);
             self::checkTitleProp($res, $d);
             self::generatePid($res, $d);
         } catch (RequestException $e) {
@@ -218,12 +206,11 @@ class Handler {
      * 
      * @param FedoraResource $res
      * @param array $txRes
-     * @param array $delUris
      * @param Doorkeeper $d
      * @throws LogicException
      */
     static private function checkIdProp(FedoraResource $res, array $txRes,
-                                        array $delUris, Doorkeeper $d) {
+                                        Doorkeeper $d) {
         $prop         = RC::idProp();
         $namespace    = RC::idNmsp();
         $ontologyPart = $d->isOntologyPart($res->getUri());
@@ -261,27 +248,21 @@ class Handler {
 
             // every id must be unique
             $matches = array();
-            foreach ($d->getFedora()->getResourcesById($id) as $i) {
-                try {
-                    $i->getMetadata();
-                    // only if resource still exists
-                    $matches[] = $i->getUri();
-                } catch (RequestException $e) {
-                    if ($e->getCode() !== 410) {
-                        throw $e;
-                    }
-                }
+            try {
+                $matches[] = $d->getFedora()->getResourceById($id)->getUri(true);
+            } catch (NotFound $e) {
+                
             }
             foreach ($txRes as $i) {
                 foreach ($i->getIds() as $j) {
                     if ($j === $id) {
-                        $matches[] = $i->getUri();
+                        $matches[] = $i->getUri(true);
                     }
                 }
             }
             $matches = array_unique($matches);
 
-            if (count($matches) > 1 || count($matches) == 1 && $matches[0] !== $res->getUri()) {
+            if (count($matches) > 1 || count($matches) == 1 && $matches[0] !== $res->getUri(true)) {
                 throw new LogicException("duplicated fedoraIdProp");
             }
         }
@@ -377,11 +358,13 @@ class Handler {
             return true; // resource outside our repository, we believe it exists
         }
 
-        $res = $d->getFedora()->getResourcesById($uri);
-        foreach ($res as $i) {
-            if (!in_array($i->getUri(true), $delUris)) {
+        try {
+            $res = $d->getFedora()->getResourceById($uri);
+            if (!in_array($res->getUri(true), $delUris)) {
                 return true;
             }
+        } catch (NotFound $e) {
+            
         }
 
         foreach ($resources as $i) {
@@ -406,7 +389,7 @@ class Handler {
         $orphans = $d->getFedora()->runSparql($query);
         foreach ($orphans as $i) {
             if (!in_array($i->res, $delUris)) {
-                throw new LogicException('orphaned reference to fedoraIdProp');
+                throw new LogicException('orphaned reference to fedoraIdProp in ' . $i->res);
             }
         }
     }

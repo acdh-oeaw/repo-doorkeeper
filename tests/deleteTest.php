@@ -19,7 +19,7 @@ use EasyRdf\Graph;
 RC::init('config.ini');
 $fedora = new Fedora();
 $idProp = RC::idProp();
-$meta = (new Graph())->resource('.');
+$meta   = (new Graph())->resource('.');
 $meta->addLiteral(RC::titleProp(), 'test resource');
 $meta->addResource($idProp, 'http://random.id/' . rand());
 
@@ -38,23 +38,23 @@ $res = $fedora->createResource($meta);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
 $fedora->begin();
-$res = new FedoraResource($fedora, $fedora->sanitizeUri($res->getUri()));
+$res = $fedora->getResourceByUri($res->getUri());
 $res->delete();
 $fedora->commit();
 
 ##########
 echo "references to deleted resource are checked\n";
 $fedora->begin();
-$res1 = $fedora->createResource($meta);
+$res1  = $fedora->createResource($meta);
 $meta2 = $res1->getMetadata();
 $meta2->delete($idProp);
 $meta2->addResource('https://my.ow/property', $res1->getId());
 $meta2->addResource($idProp, 'http://random.id/' . rand());
-$res2 = $fedora->createResource($meta2);
+$res2  = $fedora->createResource($meta2);
 $fedora->commit();
 sleep(2); // give triplestore time to synchronize
 $fedora->begin();
-$res1 = new FedoraResource($fedora, $fedora->sanitizeUri($res1->getUri()));
+$res1  = $fedora->getResourceByUri($res1->getUri());
 $res1->delete();
 try {
     $fedora->commit();
