@@ -19,6 +19,7 @@ use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
 use acdhOeaw\fedora\exceptions\Deleted;
+use acdhOeaw\fedora\exceptions\NoAcdhId;
 
 /**
  * Description of Doorkeeper
@@ -213,7 +214,7 @@ class Doorkeeper {
 
                     $updateQuery = $this->pdo->prepare("UPDATE resources SET acdh_id = ? WHERE transaction_id = ? AND resource_id = ?");
                     $updateQuery->execute(array($acdhId, $this->transactionId, $resourceId));
-                } catch (RuntimeException $e) {
+                } catch (NoAcdhId $e) {
                     if (!$this->isOntologyPart($this->proxyUrl)) {
                         throw $e;
                     }

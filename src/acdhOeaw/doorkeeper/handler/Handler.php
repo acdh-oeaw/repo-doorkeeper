@@ -30,6 +30,7 @@ use zozlak\util\UUID;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\exceptions\NotFound;
+use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\fedora\metadataQuery\QueryParameter;
@@ -372,7 +373,7 @@ class Handler {
                 if ($i->getId() === $uri) {
                     return true;
                 }
-            } catch (RuntimeException $e) {
+            } catch (NoAcdhId $e) {
                 if (!$d->isOntologyPart($i->getUri())) {
                     throw $e;
                 }
