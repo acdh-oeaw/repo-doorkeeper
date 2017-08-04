@@ -20,6 +20,7 @@ use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
 use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
+use acdhOeaw\fedora\exceptions\NotFound;
 
 /**
  * Description of Doorkeeper
@@ -191,7 +192,7 @@ class Doorkeeper {
     private function extractResourceId(string $uri): string {
         $resourceId = $uri;
         $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $resourceId);
-        $resourceId = preg_replace('|/fcr:metadata$|', '', $resourceId);
+        $resourceId = preg_replace('|/fcr:[a-z]+$|', '', $resourceId);
         return $resourceId;
     }
 
@@ -206,7 +207,8 @@ class Doorkeeper {
         ");
         try {
             $acdhId = null;
-            if ($this->method === 'DELETE') {
+            $tombstone = preg_match('|/fcr:tombstone$|', $this->proxyUrl);
+            if ($this->method === 'DELETE' && !$tombstone) {
                 try {
                     $res        = $this->fedora->getResourceByUri($this->proxyUrl);
                     $acdhId     = $res->getId();
@@ -234,7 +236,7 @@ class Doorkeeper {
                         $errors[] = $e;
                     }
                 }
-            } else {
+            } else if (!$tombstone) {
                 $resourceId = $this->extractResourceId($this->resourceId);
                 $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
@@ -269,6 +271,8 @@ class Doorkeeper {
                 try {
                     $resources[] = $this->fedora->getResourceByUri($i->resource_id);
                 } catch (Deleted $e) {
+                    $deletedUris[] = $this->fedora->standardizeUri($i->resource_id);
+                } catch (NotFound $e) {
                     $deletedUris[] = $this->fedora->standardizeUri($i->resource_id);
                 }
             }
