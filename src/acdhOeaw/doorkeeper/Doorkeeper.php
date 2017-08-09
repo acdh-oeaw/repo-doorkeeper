@@ -193,6 +193,9 @@ class Doorkeeper {
         $resourceId = $uri;
         $resourceId = preg_replace('|^.*/tx:[-a-z0-9]+/|', '', $resourceId);
         $resourceId = preg_replace('|/fcr:[a-z]+$|', '', $resourceId);
+        if ($resourceId === '') {
+            $resourceId = '/';
+        }
         return $resourceId;
     }
 
@@ -238,6 +241,7 @@ class Doorkeeper {
                 }
             } else if (!$tombstone) {
                 $resourceId = $this->extractResourceId($this->resourceId);
+$this->log($this->resourceId . ' # ' . $resourceId);
                 $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
                 foreach ($this->postEditHandlers as $i) {
