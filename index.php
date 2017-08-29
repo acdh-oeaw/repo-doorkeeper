@@ -29,6 +29,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 use zozlak\util\ClassLoader;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\doorkeeper\Auth;
+use acdhOeaw\doorkeeper\Route;
 use acdhOeaw\util\RepoConfig as RC;
 use EasyRdf\RdfNamespace;
 
@@ -47,8 +48,13 @@ if ($initDb) {
 }
 
 $doorkeeper = new Doorkeeper($pdo);
+
 $doorkeeper->registerCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkTransaction');
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
 $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
+
+$doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array(), true));
+
+$doorkeeper->registerRoute(new Route('/browser', 'http://vagrant-drupal/browser', array(), false));
 
 $doorkeeper->handleRequest();

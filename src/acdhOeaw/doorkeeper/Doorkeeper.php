@@ -72,6 +72,7 @@ class Doorkeeper {
     private $postCreateHandlers = array();
     private $postEditHandlers   = array();
     private $logFile;
+    private $routes             = array();
 
     public function __construct(PDO $pdo) {
         Auth::init($pdo);
@@ -140,6 +141,10 @@ class Doorkeeper {
         $this->postEditHandlers[] = $handler;
     }
 
+    public function registerRoute(Route $route) {
+        $this->routes[$route->getRoute()] = $route;
+    }
+
     public function getDeletedResourceId(string $uri): string {
         $resourceId = $this->extractResourceId($this->fedora->sanitizeUri($uri));
 
@@ -162,6 +167,20 @@ class Doorkeeper {
     public function handleRequest() {
         $authData = Auth::authenticate();
         $this->log(filter_input(INPUT_SERVER, 'REQUEST_METHOD') . ' ' . $this->proxyUrl . ' ' . $authData->user . '(' . (int) $authData->admin . ';' . implode(',', $authData->roles) . ')');
+
+        $reqUri = filter_input(INPUT_SERVER, 'REQUEST_URI');
+        foreach ($this->routes as $i) {
+            if ($i->matches($reqUri)) {
+                try {
+                    $this->proxyUrl = $i->authenticate();
+                    $this->handleReadOnly();
+                } catch (RuntimeException $e) {
+                    
+                }
+                return;
+            }
+        }
+
         if ($this->isMethodReadOnly() || $this->pass) {
             $this->handleReadOnly();
         } else if ($this->resourceId === 'fcr:tx' && $this->method === 'POST') {
@@ -181,7 +200,7 @@ class Doorkeeper {
 
     private function handleReadOnly() {
         try {
-            $this->proxy->proxy($this->proxyUrl, $this); // pass request and return results
+            $this->proxy->proxy($this->proxyUrl); // pass request and return results
         } catch (RequestException $e) {
             
         } catch (Exception $e) {
@@ -209,7 +228,7 @@ class Doorkeeper {
             WHERE NOT EXISTS (SELECT 1 FROM resources WHERE transaction_id = t.a AND resource_id = t.b)
         ");
         try {
-            $acdhId = null;
+            $acdhId    = null;
             $tombstone = preg_match('|/fcr:tombstone$|', $this->proxyUrl);
             if ($this->method === 'DELETE' && !$tombstone) {
                 try {
@@ -241,7 +260,7 @@ class Doorkeeper {
                 }
             } else if (!$tombstone) {
                 $resourceId = $this->extractResourceId($this->resourceId);
-$this->log($this->resourceId . ' # ' . $resourceId);
+                $this->log($this->resourceId . ' # ' . $resourceId);
                 $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
                 foreach ($this->postEditHandlers as $i) {
