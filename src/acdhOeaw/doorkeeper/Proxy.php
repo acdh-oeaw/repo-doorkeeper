@@ -20,7 +20,18 @@ use acdhOeaw\util\RepoConfig as RC;
  */
 class Proxy {
 
-    public function proxy($url): Response {
+    static public function getHeader(string $header): string {
+        $tmp = filter_input(\INPUT_SERVER, 'HTTP_X_FORWARDED_' . $header);
+        if (empty($tmp)) {
+            $tmp = filter_input(\INPUT_SERVER, 'HTTP_' . $header);
+            if (empty($tmp)) {
+                $tmp = '';
+            }
+        }
+        return $tmp;
+    }
+
+    public function proxy(string $url, bool $preserveHost = true, bool $proxyHeaders = true): Response {
         $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $input  = $method !== 'HEAD' ? fopen('php://input', 'r') : null;
 
@@ -47,9 +58,18 @@ class Proxy {
             'Authorization'       => $authHeader,
             'Accept'              => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
             'Content-Type'        => $contentType,
-            'Content-Disposition' => $contentDisposition,
+            'Content-Disposition' => $contentDisposition
         );
         $headers[RC::get('fedoraRolesHeader')] = implode(',', $authData->roles);
+        if ($proxyHeaders) {
+            $headers['X_FORWARDED_FOR'] = self::getHeader('FOR');
+            $headers['X_FORWARDED_PROTO'] = self::getHeader('PROTO');
+            $headers['X_FORWARDED_HOST'] = self::getHeader('HOST');
+            $headers['X_FORWARDED_PORT'] = self::getHeader('PORT');
+        }
+        if ($preserveHost) {
+            $headers['HOST'] = self::getHeader('HOST');
+        }
         
         //print_r([$method, $url, $headers, $input]);
         $request  = new Request($method, $url, $headers, $input);
