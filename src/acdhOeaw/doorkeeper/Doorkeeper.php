@@ -173,7 +173,7 @@ class Doorkeeper {
             if ($i->matches($reqUri)) {
                 try {
                     $this->proxyUrl = $i->authenticate();
-                    $this->handleReadOnly();
+                    $this->handleReadOnly($i->getProxyOptions());
                 } catch (RuntimeException $e) {
                     
                 }
@@ -198,13 +198,12 @@ class Doorkeeper {
         }
     }
 
-    private function handleReadOnly() {
+    private function handleReadOnly(ProxyOptions $opts = null) {
         try {
-            $this->proxy->proxy($this->proxyUrl); // pass request and return results
-        } catch (RequestException $e) {
-            
+            $response = $this->proxy->proxy($this->proxyUrl, $opts); // pass request and return results
+            $this->log('  ' . $this->proxyUrl . ' ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
         } catch (Exception $e) {
-            
+            $this->log('  ' . $e->getMessage());
         }
     }
 

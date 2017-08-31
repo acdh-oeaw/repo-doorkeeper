@@ -11,6 +11,7 @@ namespace acdhOeaw\doorkeeper;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Exception\RequestException;
 use acdhOeaw\util\RepoConfig as RC;
 
 /**
@@ -31,7 +32,11 @@ class Proxy {
         return $tmp;
     }
 
-    public function proxy(string $url, bool $preserveHost = true, bool $proxyHeaders = true): Response {
+    public function proxy(string $url, ProxyOptions $opts = null): Response {
+        if ($opts === null) {
+            $opts = new ProxyOptions();
+        }
+
         $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $input  = $method !== 'HEAD' ? fopen('php://input', 'r') : null;
 
@@ -41,8 +46,9 @@ class Proxy {
         $options['on_headers'] = function(Response $r) {
             $this->handleHeaders($r);
         };
-        $options['verify'] = false;
-        $client            = new Client($options);
+        $options['verify']          = false;
+        $options['allow_redirects'] = $opts->allowRedirects;
+        $client                     = new Client($options);
 
         $contentType = filter_input(INPUT_SERVER, 'HTTP_CONTENT_TYPE');
         $contentType = $contentType ? $contentType : filter_input(INPUT_SERVER, 'CONTENT_TYPE');
@@ -50,35 +56,58 @@ class Proxy {
         $contentDisposition = filter_input(INPUT_SERVER, 'HTTP_CONTENT_DISPOSITION');
         $contentDisposition = $contentDisposition ? $contentDisposition : filter_input(INPUT_SERVER, 'CONTENT_DISPOSITION');
 
-        $authData = Auth::authenticate();
-        $cfgPrefix = $authData->admin ? '' : 'Guest';
-        $authHeader = Auth::getHttpBasicHeader(RC::get('fedora' . $cfgPrefix . 'User'), RC::get('fedora' . $cfgPrefix . 'Pswd'));
-        
         $headers = array(
-            'Authorization'       => $authHeader,
             'Accept'              => filter_input(INPUT_SERVER, 'HTTP_ACCEPT'),
             'Content-Type'        => $contentType,
             'Content-Disposition' => $contentDisposition
         );
-        $headers[RC::get('fedoraRolesHeader')] = implode(',', $authData->roles);
-        if ($proxyHeaders) {
-            $headers['X_FORWARDED_FOR'] = self::getHeader('FOR');
-            $headers['X_FORWARDED_PROTO'] = self::getHeader('PROTO');
-            $headers['X_FORWARDED_HOST'] = self::getHeader('HOST');
-            $headers['X_FORWARDED_PORT'] = self::getHeader('PORT');
-        }
-        if ($preserveHost) {
-            $headers['HOST'] = self::getHeader('HOST');
-        }
-        
-        //print_r([$method, $url, $headers, $input]);
-        $request  = new Request($method, $url, $headers, $input);
-        $response = $client->send($request);
+        if ($opts->authHeaders) {
+            $authData   = Auth::authenticate();
+            $cfgPrefix  = $authData->admin ? '' : 'Guest';
+            $authHeader = Auth::getHttpBasicHeader(RC::get('fedora' . $cfgPrefix . 'User'), RC::get('fedora' . $cfgPrefix . 'Pswd'));
 
-        if ($input) {
-            fclose($input);
+            $headers['Authorization']              = $authHeader;
+            $headers[RC::get('fedoraRolesHeader')] = implode(',', $authData->roles);
         }
-        fclose($output);
+        if ($opts->proxyHeaders) {
+            $headers['X-FORWARDED-FOR']    = self::getHeader('FOR');
+            $headers['X-FORWARDED-PROTO']  = self::getHeader('PROTO');
+            $headers['X-FORWARDED-HOST']   = self::getHeader('HOST');
+            $headers['X-FORWARDED-PORT']   = self::getHeader('PORT');
+            $headers['X-FORWARDED-SERVER'] = self::getHeader('SERVER');
+        }
+        if ($opts->preserveHost) {
+            $headers['Host'] = self::getHeader('HOST');
+        }
+        if ($opts->cookies) {
+            $headers['Cookie'] = array();
+            foreach ($_COOKIE as $k => $v) {
+                $headers['Cookie'][] = $k . '=' . $v;
+            }
+            $headers['Cookie'] = implode('; ', $headers['Cookie']);
+        }
+
+        //print_r([$method, $url, $headers, $input]);
+        $request = new Request($method, $url, $headers, $input);
+        try {
+            $response = $client->send($request);
+        } catch (RequestException $e) {
+            if (!$e->hasResponse()) {
+                throw $e; // if there is no response we can't properly return from function
+            }
+            $response = $e->getResponse();
+
+            // place debugging code here
+            if (preg_match('/browser/', $url)) {
+                echo $response->getStatusCode() . " ###\n";
+                print_r($response->getHeaders());
+            }
+        } finally {
+            if ($input) {
+                fclose($input);
+            }
+            fclose($output);
+        }
 
         return $response;
     }

@@ -39,19 +39,26 @@ class Route {
     private $proxyUrl;
     private $roles;
     private $admin;
+    private $opts;
 
     public function __construct(string $route, string $proxyUrl,
-                                array $roles = array(), bool $admin = false) {
+                                array $roles = array(), bool $admin = false,
+                                ProxyOptions $opts = null) {
         $this->route    = $route;
         $this->proxyUrl = $proxyUrl;
         $this->roles    = $roles;
         $this->admin    = $admin;
+        $this->opts     = $opts ? $opts : new ProxyOptions();
     }
 
     public function getRoute(): string {
         return $this->route;
     }
 
+    public function getProxyOptions(): ProxyOptions {
+        return $this->opts;
+    }
+    
     public function matches(string $reqUri): bool {
         return preg_match('|^' . $this->route . '|', $reqUri);
     }
@@ -72,9 +79,10 @@ class Route {
             }
             throw $ex;
         }
-        
+
         $reqUri = filter_input(INPUT_SERVER, 'REQUEST_URI');
         $reqUri = preg_replace('|^' . $this->route . '|', $this->proxyUrl, $reqUri);
         return $reqUri;
     }
+
 }
