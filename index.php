@@ -55,6 +55,6 @@ $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::chec
 
 $doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array(), true));
 
-$doorkeeper->registerRoute(new Route('/browser', 'http://vagrant-drupal/browser', array(), false));
+$doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 
 $doorkeeper->handleRequest();
