@@ -66,9 +66,8 @@ class Route {
     public function authenticate(): string {
         $authData = Auth::authenticate();
 
-        $adminFlag = $this->admin && !$authData->admin;
         $roleFlag  = count($this->roles) > 0 && count(array_intersect($this->roles, $authData->roles)) == 0;
-        if ($adminFlag || $roleFlag) {
+        if (!$authData->admin && ($roleFlagi || $this->admin)) {
             if ($authData->user == Auth::DEFAULT_USER) {
                 $ex = new RuntimeException('Unauthorized', 401);
                 header('HTTP/1.1 401 Unauthorized');

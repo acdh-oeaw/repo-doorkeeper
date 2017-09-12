@@ -53,7 +53,7 @@ $doorkeeper->registerCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkT
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
 $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
 
-$doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array(), true));
+$doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array('resolver'), false));
 
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 
