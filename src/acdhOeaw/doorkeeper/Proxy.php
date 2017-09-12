@@ -32,6 +32,12 @@ class Proxy {
         return $tmp;
     }
 
+    private $doorkeeper;
+
+    public function __construct(Doorkeeper $d) {
+        $this->doorkeeper = $d;
+    }
+
     public function proxy(string $url, ProxyOptions $opts = null): Response {
         if ($opts === null) {
             $opts = new ProxyOptions();
@@ -77,7 +83,8 @@ class Proxy {
             $headers['X-FORWARDED-SERVER'] = self::getHeader('SERVER');
         }
         if ($opts->preserveHost) {
-            $headers['Host'] = self::getHeader('HOST');
+            $tmp = explode(', ', self::getHeader('HOST'));
+            $headers['Host'] = trim($tmp[0]);
         }
         if ($opts->cookies) {
             $headers['Cookie'] = array();
@@ -86,8 +93,8 @@ class Proxy {
             }
             $headers['Cookie'] = implode('; ', $headers['Cookie']);
         }
-
-        //print_r([$method, $url, $headers, $input]);
+        
+	//$this->doorkeeper->log(json_encode($headers));
         $request = new Request($method, $url, $headers, $input);
         try {
             $response = $client->send($request);
