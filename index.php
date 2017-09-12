@@ -57,6 +57,8 @@ $doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blaz
 
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 
+$doorkeeper->registerRoute(new Route('/oai', 'http://oai', array(), false));
+
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: X-Requested-With, Content-Type');
 $doorkeeper->handleRequest();
