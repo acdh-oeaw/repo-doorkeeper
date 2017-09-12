@@ -175,6 +175,17 @@ class Handler {
             }
         }
 
+        // special case acdhi:hasFirstName and acdhi:hasLastName
+        $first = $metadata->getLiteral('http://vocabs.acdh.oeaw.ac.at#hasFirstName');
+        $last = $metadata->getLiteral('http://vocabs.acdh.oeaw.ac.at#hasLastName');
+        $title = trim($first . ' ' .$last);
+        if ($title !== '') {
+            $metadata->addLiteral($titleProp, $title);
+            $res->setMetadata($metadata);
+            $res->updateMetadata();
+            return;
+        }
+        
         // special case - foaf:givenName and foaf:familyName
         $given  = $metadata->getLiteral('http://xmlns.com/foaf/0.1/givenName');
         $family = $metadata->getLiteral('http://xmlns.com/foaf/0.1/familyName');
