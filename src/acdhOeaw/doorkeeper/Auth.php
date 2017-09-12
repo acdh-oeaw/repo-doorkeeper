@@ -81,13 +81,11 @@ class Auth {
         }
         
         $authData = new Auth();
-        
+       
         $shibHeader = 'HTTP_' . strtoupper(RC::get('doorkeeperShibUserHeader'));
-        if (isset($_SERVER[$shibHeader])) {
-            $tmpUser = filter_input(\INPUT_SERVER, $shibHeader);
-            if (strlen(trim($tmpUser)) > 0) {
-                $authData->user = $tmpUser;
-            }
+        $tmpUser = trim(filter_input(\INPUT_SERVER, $shibHeader));
+        if (strlen($tmpUser) > 0 && $tmpUser !== '(null)') {
+            $authData->user = $tmpUser;
         } elseif (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
             $tmpUser = $_SERVER['PHP_AUTH_USER'];
             $tmpPswd = $_SERVER['PHP_AUTH_PW'];
