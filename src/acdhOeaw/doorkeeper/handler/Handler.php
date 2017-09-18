@@ -178,12 +178,19 @@ class Handler {
         // special case acdhi:hasFirstName and acdhi:hasLastName
         $first = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasFirstName');
         $last = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasLastName');
-        $title = trim($first . ' ' .$last);
-        if ($title !== '') {
-            $metadata->addLiteral($titleProp, $title);
-            $res->setMetadata($metadata);
-            $res->updateMetadata();
-            return;
+        
+        if( (count($first) > 0 ) && (count($last) > 0) ){
+            
+            $fN = $first->getValue();
+            $lN = $last->getValue();
+            $title = trim($fN . ' ' .$lN);
+            
+            if ($title !== '') {
+                $metadata->addLiteral($titleProp, $title);
+                $res->setMetadata($metadata);
+                $res->updateMetadata();
+                return;
+            }
         }
         
         // special case - foaf:givenName and foaf:familyName
