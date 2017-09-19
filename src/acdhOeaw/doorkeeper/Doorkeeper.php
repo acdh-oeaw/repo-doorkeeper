@@ -283,19 +283,31 @@ class Doorkeeper {
 
         if ($this->resourceId === 'fcr:tx/fcr:commit') {
             // COMMIT - check resources integrity
-            $query = $this->pdo->prepare("SELECT resource_id FROM resources WHERE transaction_id = ?");
+            $query = $this->pdo->prepare("SELECT resource_id, acdh_id FROM resources WHERE transaction_id = ?");
             $query->execute(array($this->transactionId));
 
-            $resources   = array();
-            $deletedUris = array();
+            $resources    = array();
+            $deletedUris  = array();
+            $uuids        = array();
+            $deletedUuids = array();
 
             while ($i = $query->fetch(PDO::FETCH_OBJ)) {
                 try {
-                    $resources[] = $this->fedora->getResourceByUri($i->resource_id);
+                    $res                  = $this->fedora->getResourceByUri($i->resource_id);
+                    $resources[]          = $res;
+                    $uuids[$res->getId()] = $res->getUri(true);
                 } catch (Deleted $e) {
-                    $deletedUris[] = $this->fedora->standardizeUri($i->resource_id);
+                    $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
+                    $deletedUuids[] = $i->acdh_id;
                 } catch (NotFound $e) {
-                    $deletedUris[] = $this->fedora->standardizeUri($i->resource_id);
+                    $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
+                    $deletedUuids[] = $i->acdh_id;
+                }
+            }
+            for ($i = 0; $i < count($deletedUris); $i++) {
+                if (isset($uuids[$deletedUuids[$i]])) {
+                    $this->log('    removing ' . $deletedUris[$i] . ' from deleted resources list because it was succeeded by ' . $uuids[$deletedUuids[$i]]);
+                    unset($deletedUris[$i]);
                 }
             }
             foreach ($this->commitHandlers as $i) {
