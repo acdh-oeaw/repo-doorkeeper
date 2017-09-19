@@ -293,7 +293,7 @@ class Handler {
 
         // part of the ontology - exactly one id required
         if ($ontologyPart && count($ids) !== 1) {
-            throw new LogicException('ontology resources must have exactly one fedoraIdProp triple');
+            throw new LogicException('ontology resources must have exactly one fedoraIdProp triple (' . count($ids) . ')');
         }
         if (!$ontologyPart && count($ids) - $acdhIdCount == 0) {
             throw new LogicException('non-ontology resources must have at least one "non-ACDH id" identifier');
