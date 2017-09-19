@@ -54,7 +54,7 @@ $doorkeeper->registerCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkT
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
 $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
 
-$doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array('resolver'), false));
+$doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array('resolver', 'oai'), false));
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 $doorkeeper->registerRoute(new Route('/oai', 'http://oai', array(), false));
 $doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.eos.arz.oeaw.ac.at/services/cmdi2html', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));

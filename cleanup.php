@@ -48,12 +48,17 @@ $pdo->query("DELETE FROM resources");
 $pdo->query("DELETE FROM transactions");
 
 // create an admin user entry
-$user = RC::get('fedoraUser');
-$query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
-$query->execute(array($user));
-$query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
-$query->execute(array($user));
-$query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 1)");
-$query->execute(array($user, password_hash(RC::get('fedoraPswd'), PASSWORD_DEFAULT)));
+$users = array();
+$users[RC::get('fedoraUser')] = RC::get('fedoraPswd');
+$users['resolver'] = RC::get('resolverPswd');
+$users['oai'] = RC::get('oaiPswd');
+foreach ($users as $user => $pswd) {
+    $query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
+    $query->execute(array($user));
+    $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+    $query->execute(array($user));
+    $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 1)");
+    $query->execute(array($user, password_hash($pswd, PASSWORD_DEFAULT)));
+}
 
 echo "  Doorkeeper database cleanup successful\n";
