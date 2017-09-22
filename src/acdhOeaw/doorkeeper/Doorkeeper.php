@@ -68,7 +68,8 @@ class Doorkeeper {
     private $fedora;
     private $proxy;
     private $pass               = false;
-    private $commitHandlers     = array();
+    private $preCommitHandlers  = array();
+    private $postCommitHandlers = array();
     private $postCreateHandlers = array();
     private $postEditHandlers   = array();
     private $logFile;
@@ -129,8 +130,12 @@ class Doorkeeper {
         return $this->fedora;
     }
 
-    public function registerCommitHandler($handler) {
-        $this->commitHandlers[] = $handler;
+    public function registerPreCommitHandler($handler) {
+        $this->preCommitHandlers[] = $handler;
+    }
+
+    public function registerPostCommitHandler($handler) {
+        $this->postCommitHandlers[] = $handler;
     }
 
     public function registerPostCreateHandler($handler) {
@@ -310,7 +315,7 @@ class Doorkeeper {
                     unset($deletedUris[$i]);
                 }
             }
-            foreach ($this->commitHandlers as $i) {
+            foreach ($this->preCommitHandlers as $i) {
                 try {
                     $i($resources, $deletedUris, $this);
                 } catch (Exception $e) {
@@ -329,6 +334,17 @@ class Doorkeeper {
         if (count($errors) == 0) {
             try {
                 $this->proxy->proxy($this->proxyUrl);
+
+                $time = ceil(RC::get('doorkeeperSleepPerResource') * count($resources));
+                $this->log('Sleeping ' . $time . ' s after commiting transaction involving ' . count($resources) . ' resources.');
+                sleep($time);
+                foreach ($this->postCommitHandlers as $i) {
+                    try {
+                        $i($resources, $deletedUris, $this);
+                    } catch (Exception $e) {
+                        $errors[] = $e;
+                    }
+                }
             } catch (Exception $e) {
                 $errors[] = $e;
             }

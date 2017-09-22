@@ -16,6 +16,7 @@ doorkeeperLogFile="log"
 doorkeeperOntologyLabelProp="http://www.w3.org/2000/01/rdf-schema#label"
 doorkeeperOntologyLocation="ontology"
 doorkeeperShibUserHeader="eppn"
+doorkeeperSleepPerResource=0.1
 fedoraRoleHeader="Roles-List"
 sparqlUrl="http://fedora.localhost/blazegraph/sparql"
 
