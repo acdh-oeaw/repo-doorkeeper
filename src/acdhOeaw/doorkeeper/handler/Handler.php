@@ -59,7 +59,7 @@ class Handler {
      */
     static public function checkTransaction(array $modResources, array $delUris,
                                             Doorkeeper $d) {
-        $d->log(" transaction commit handler for: " . $d->getTransactionId());
+        $d->log(" pre transaction commit handler for: " . $d->getTransactionId());
 
         foreach ($modResources as $i) {
             $d->log('  ' . $i->getUri());
@@ -73,6 +73,13 @@ class Handler {
             $d->log('  ' . $i);
             self::checkOrphanedRelProp($i, $delUris, $d);
         }
+    }
+
+    static public function postTransaction(array $modResources, array $delUris,
+                                           Doorkeeper $d) {
+        $d->log(" post transaction commit handler for: " . $d->getTransactionId());
+
+        // update acdh:hasExtent for collections
     }
 
     /**
@@ -133,9 +140,19 @@ class Handler {
     }
 
     /**
-     * Every resource must have a title-like property.
-     * If such property is found, it is copied as the cfg:fedoraTitleProp.
-     * If not, an error is thrown.
+     * Every resource must have a title property (cfg:fedoraTitleProp).
+     * 
+     * If there are acdh:hasFirstName and acdh:hasLastName available, concatenation
+     * of them overwrites the previous title.
+     * This is used to provide right titles for resources representing persons
+     * when the detailed data about a person was imported after the resource
+     * was created (e.g. when it was created because someone mentioned given
+     * person id)
+     * 
+     * If there is no title nor acdh:hasFirstName and acdh:hasLastName available
+     * a number of alternative properties is searched and the first one found
+     * is taken as a title.
+     * It this wasn't enough to find a title, an error is raised.
      * 
      * @param FedoraResource $res
      * @param Doorkeeper $d
@@ -153,58 +170,54 @@ class Handler {
 
         $metadata = $res->getMetadata();
 
+        // special case acdh:hasFirstName and acdh:hasLastName
+        $first = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasFirstName');
+        $last  = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasLastName');
+        $title = trim((string) $first . ' ' . (string) $last);
+
         $titles = $metadata->allLiterals($titleProp);
         if (count($titles) > 1) {
             throw new LogicException("more than one fedoraTitleProp");
         } elseif (count($titles) == 1) {
-            if (trim($titles[0]) === '') {
+            $tmp = (string) $titles[0];
+            if (trim($tmp) === '') {
                 throw new LogicException("fedoraTitleProp value is empty");
-            } else {
+            } elseif ($title === '' || $title === $tmp) {
                 return;
             }
         }
 
-        // no direct hit - search for candidates
-        foreach ($searchProps as $prop) {
-            $matches = $metadata->allLiterals($prop);
-            if (count($matches) > 0 && trim($matches[0]) !== '') {
-                $metadata->addLiteral($titleProp, $matches[0]);
-                $res->setMetadata($metadata);
-                $res->updateMetadata();
-                return;
+        if ($title === '') {
+            // no direct hit - search for candidates
+            foreach ($searchProps as $prop) {
+                $matches = $metadata->allLiterals($prop);
+                if (count($matches) > 0 && trim($matches[0]) !== '') {
+                    $title  = trim((string) $matches[0]);
+                    $update = true;
+                }
             }
         }
 
-        // special case acdhi:hasFirstName and acdhi:hasLastName
-        $first = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasFirstName');
-        $last = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasLastName');
-        
-        if( (count($first) > 0 ) && (count($last) > 0) ){
-            
-            $fN = $first->getValue();
-            $lN = $last->getValue();
-            $title = trim($fN . ' ' .$lN);
-            
-            if ($title !== '') {
-                $metadata->addLiteral($titleProp, $title);
-                $res->setMetadata($metadata);
-                $res->updateMetadata();
-                return;
-            }
-        }
-        
         // special case - foaf:givenName and foaf:familyName
-        $given  = $metadata->getLiteral('http://xmlns.com/foaf/0.1/givenName');
-        $family = $metadata->getLiteral('http://xmlns.com/foaf/0.1/familyName');
-        $title  = trim($given . ' ' . $family);
-        if ($title !== '') {
-            $metadata->addLiteral($titleProp, $title);
-            $res->setMetadata($metadata);
-            $res->updateMetadata();
-            return;
+        if ($title === '') {
+            $given  = $metadata->getLiteral('http://xmlns.com/foaf/0.1/givenName');
+            $family = $metadata->getLiteral('http://xmlns.com/foaf/0.1/familyName');
+            $title  = trim((string) $given . ' ' . (string) $family);
+            if ($title !== '') {
+                $update = true;
+            }
         }
 
-        throw new LogicException("fedoraTitleProp is missing");
+        if ($title === '') {
+            throw new LogicException("fedoraTitleProp is missing");
+        }
+
+        // if we are here, the title has to be updated
+        $d->log('    setting title to ' . $title);
+        $metadata->delete($titleProp);
+        $metadata->addLiteral($titleProp, $title);
+        $res->setMetadata($metadata);
+        $res->updateMetadata();
     }
 
     /**
