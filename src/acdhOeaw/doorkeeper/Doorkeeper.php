@@ -317,6 +317,7 @@ class Doorkeeper {
                     unset($deletedUris[$i]);
                 }
             }
+            $this->fedora->prolong();
             foreach ($this->preCommitHandlers as $i) {
                 try {
                     $i($resources, $deletedUris, $this);
