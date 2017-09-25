@@ -307,6 +307,8 @@ class Doorkeeper {
                 } catch (NotFound $e) {
                     $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
                     $deletedUuids[] = $i->acdh_id;
+                } catch (NoAcdhId $e) {
+                    // nothing to be done by the doorkeeper - it's handlers responsibility
                 }
             }
             for ($i = 0; $i < count($deletedUris); $i++) {
@@ -335,9 +337,12 @@ class Doorkeeper {
             try {
                 $this->proxy->proxy($this->proxyUrl);
 
-                $time = ceil(RC::get('doorkeeperSleepPerResource') * count($resources));
-                $this->log('Sleeping ' . $time . ' s after commiting transaction involving ' . count($resources) . ' resources.');
-                sleep($time);
+                if ($this->resourceId === 'fcr:tx/fcr:commit') {
+                    $time = ceil(RC::get('doorkeeperSleepPerResource') * count($resources));
+                    $this->log('Sleeping ' . $time . ' s after commiting transaction involving ' . count($resources) . ' resources.');
+                    sleep($time);
+                }
+                
                 foreach ($this->postCommitHandlers as $i) {
                     try {
                         $i($resources, $deletedUris, $this);
