@@ -12,6 +12,7 @@ use PDO;
 use Exception;
 use RuntimeException;
 use LogicException;
+use EasyRdf\Graph;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
@@ -21,6 +22,7 @@ use acdhOeaw\fedora\Fedora;
 use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\exceptions\NotFound;
+use acdhOeaw\fedora\metadataQuery\SimpleQuery;
 
 /**
  * Description of Doorkeeper
@@ -285,38 +287,15 @@ class Doorkeeper {
 
     private function handleTransactionEnd() {
         $errors = array();
-
-        if ($this->resourceId === 'fcr:tx/fcr:commit') {
-            // COMMIT - check resources integrity
-            $query = $this->pdo->prepare("SELECT resource_id, acdh_id FROM resources WHERE transaction_id = ?");
-            $query->execute(array($this->transactionId));
-
-            $resources    = array();
-            $deletedUris  = array();
-            $uuids        = array();
-            $deletedUuids = array();
-
-            while ($i = $query->fetch(PDO::FETCH_OBJ)) {
-                try {
-                    $res                  = $this->fedora->getResourceByUri($i->resource_id);
-                    $resources[]          = $res;
-                    $uuids[$res->getId()] = $res->getUri(true);
-                } catch (Deleted $e) {
-                    $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
-                    $deletedUuids[] = $i->acdh_id;
-                } catch (NotFound $e) {
-                    $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
-                    $deletedUuids[] = $i->acdh_id;
-                } catch (NoAcdhId $e) {
-                    // nothing to be done by the doorkeeper - it's handlers responsibility
-                }
+        if ($this->resourceId !== 'fcr:tx/fcr:commit') {
+            try {
+                $this->proxy->proxy($this->proxyUrl);
+            } catch (Exception $e) {
+                $errors[] = $e;
             }
-            for ($i = 0; $i < count($deletedUris); $i++) {
-                if (isset($uuids[$deletedUuids[$i]])) {
-                    $this->log('    removing ' . $deletedUris[$i] . ' from deleted resources list because it was succeeded by ' . $uuids[$deletedUuids[$i]]);
-                    unset($deletedUris[$i]);
-                }
-            }
+        } else {
+            // check the transaction
+            list($resources, $deletedUris) = $this->checkTransactionResources();
             $this->fedora->prolong();
             foreach ($this->preCommitHandlers as $i) {
                 try {
@@ -325,25 +304,23 @@ class Doorkeeper {
                     $errors[] = $e;
                 }
             }
-        }
 
-
-        // COMIT / ROLLBACK
-        $query = $this->pdo->prepare("DELETE FROM resources WHERE transaction_id = ?");
-        //$query->execute(array($this->transactionId));
-        $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
-        //$query->execute(array($this->transactionId));
-
-        if (count($errors) == 0) {
-            try {
-                $this->proxy->proxy($this->proxyUrl);
-
-                if ($this->resourceId === 'fcr:tx/fcr:commit') {
-                    $time = ceil(RC::get('doorkeeperSleepPerResource') * count($resources));
-                    $this->log('Sleeping ' . $time . ' s after commiting transaction involving ' . count($resources) . ' resources.');
-                    sleep($time);
+            // try to end the transaction
+            if (count($errors) == 0) {
+                try {
+                    $this->proxy->proxy($this->proxyUrl);
+                    $this->fedora->setTransactionId(''); // the transaction doesn't exist anymore at this point
+                    
+                    $this->log('Waiting for the triplestore sync (' . count($resources) . ' resources)...');
+                    $time = $this->waitForTriplesSync(1);
+                    $this->log('  ...done (' . $time . ' s)');
+                } catch (Exception $e) {
+                    $errors[] = $e;
                 }
-                
+            }
+
+            // run post transaction handlers
+            if (count($errors) == 0) {
                 foreach ($this->postCommitHandlers as $i) {
                     try {
                         $i($resources, $deletedUris, $this);
@@ -351,12 +328,15 @@ class Doorkeeper {
                         $errors[] = $e;
                     }
                 }
-            } catch (Exception $e) {
-                $errors[] = $e;
             }
         }
 
         $this->reportErrors($errors, true);
+        // clean up the doorkeeper database
+        $query = $this->pdo->prepare("DELETE FROM resources WHERE transaction_id = ?");
+        $query->execute(array($this->transactionId));
+        $query = $this->pdo->prepare("DELETE FROM transactions WHERE transaction_id = ?");
+        $query->execute(array($this->transactionId));
     }
 
     private function handleTransactionBegin() {
@@ -465,6 +445,89 @@ class Doorkeeper {
      */
     public function log($msg) {
         fwrite($this->logFile, $msg . "\n");
+    }
+
+    /**
+     * Assures that the triplestore is synchronized after the transaction commit.
+     * 
+     * It is done by updating a known resource and then periodicaly checking the
+     * triplestore until the change is populated.
+     * 
+     * Returns number of seconds elapsed.
+     * @param int $interval time to wait before subsequent checks
+     * @return int
+     */
+    private function waitForTriplesSync(int $interval = 1): int {
+        $t = time();
+        $syncProp = RC::get('doorkeeperSyncProp');
+        
+        try {
+            $res = $this->fedora->getResourceByUri(RC::get('doorkeeperSyncRes'));
+        } catch (NotFound $e) {
+            $meta = (new Graph())->resource('.');
+            $meta->addLiteral(RC::titleProp(), 'Technical resource used by the doorkeeper');
+            $res = $this->fedora->createResource($meta, '', RC::get('doorkeeperSyncRes'), 'PUT');
+        }
+        $meta = $res->getMetadata();
+        $value = $meta->getLiteral($syncProp);
+        $value = ($value === null ? 0 : $value->getValue()) + 1;
+        $meta->delete($syncProp);
+        $meta->addLiteral($syncProp, $value);
+        $res->setMetadata($meta);
+        $res->updateMetadata();
+        
+        $param = array($res->getUri(true), $syncProp);
+        $query = new SimpleQuery("SELECT ?val WHERE { ?@ ?@ ?val .}", $param);
+        while(true) {
+            $results = $this->fedora->runQuery($query);
+            if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
+                break;
+            }
+            sleep($interval);
+        }
+        return time() - $t;
+    }
+
+    /**
+     * Checks resources modified during the transaction:
+     * - if they still exist
+     * - if deleted ones were not replaced by the newly created/modified ones
+     * - what is their latest modification date
+     * @return array
+     */
+    private function checkTransactionResources(): array {
+        // COMMIT - check resources integrity
+        $query = $this->pdo->prepare("SELECT resource_id, acdh_id FROM resources WHERE transaction_id = ?");
+        $query->execute(array($this->transactionId));
+
+        $resources    = array();
+        $deletedUris  = array();
+        $uuids        = array();
+        $deletedUuids = array();
+
+        while ($i = $query->fetch(PDO::FETCH_OBJ)) {
+            try {
+                $res                  = $this->fedora->getResourceByUri($i->resource_id);
+                $resources[]          = $res;
+                $uuids[$res->getId()] = $res->getUri(true);
+            } catch (Deleted $e) {
+                $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
+                $deletedUuids[] = $i->acdh_id;
+            } catch (NotFound $e) {
+                $deletedUris[]  = $this->fedora->standardizeUri($i->resource_id);
+                $deletedUuids[] = $i->acdh_id;
+            } catch (NoAcdhId $e) {
+                // nothing to be done by the doorkeeper - it's handlers responsibility
+            }
+        }
+        for ($i = 0; $i < count($deletedUris); $i++) {
+            if (isset($uuids[$deletedUuids[$i]])) {
+                $this->log('    removing ' . $deletedUris[$i] . ' from deleted resources list because it was succeeded by ' . $uuids[$deletedUuids[$i]]);
+                unset($deletedUris[$i]);
+            }
+        }
+
+        return array($resources, $deletedUris);
     }
 
 }
