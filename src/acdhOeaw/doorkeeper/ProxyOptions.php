@@ -63,6 +63,11 @@ class ProxyOptions {
      */
     public $allowRedirects = false;
 
+    /**
+     * @var bool
+     */
+    public $onlyRedirect = false;
+    
     public function __construct(array $options = array()) {
         foreach ($options as $k => $v) {
             $this->$k = $v;

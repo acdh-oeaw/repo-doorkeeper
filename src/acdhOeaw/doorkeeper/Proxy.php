@@ -43,6 +43,12 @@ class Proxy {
             $opts = new ProxyOptions();
         }
 
+        if ($opts->onlyRedirect) {
+            header('HTTP/1.1 302 Found');
+            header('Location: ' . $url);
+            return;
+        }
+
         $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $input  = $method !== 'HEAD' ? fopen('php://input', 'r') : null;
 
@@ -83,7 +89,7 @@ class Proxy {
             $headers['X-FORWARDED-SERVER'] = self::getHeader('SERVER');
         }
         if ($opts->preserveHost) {
-            $tmp = explode(', ', self::getHeader('HOST'));
+            $tmp             = explode(', ', self::getHeader('HOST'));
             $headers['Host'] = trim($tmp[0]);
         }
         if ($opts->cookies) {
@@ -93,8 +99,8 @@ class Proxy {
             }
             $headers['Cookie'] = implode('; ', $headers['Cookie']);
         }
-        
-	//$this->doorkeeper->log(json_encode($headers));
+
+        //$this->doorkeeper->log(json_encode($headers));
         $request = new Request($method, $url, $headers, $input);
         try {
             $response = $client->send($request);
