@@ -51,7 +51,7 @@ if ($initDb) {
 $doorkeeper = new Doorkeeper($pdo);
 
 $doorkeeper->registerPreCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkTransaction');
-$doorkeeper->registerPreCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::postTransaction');
+$doorkeeper->registerPostCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::postTransaction');
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
 $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
 
