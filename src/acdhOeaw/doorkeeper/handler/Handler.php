@@ -34,6 +34,7 @@ use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\fedora\metadataQuery\QueryParameter;
+use acdhOeaw\fedora\metadataQuery\SimpleQuery;
 use acdhOeaw\epicHandle\HandleService;
 use acdhOeaw\util\RepoConfig as RC;
 use RuntimeException;
@@ -46,6 +47,9 @@ use GuzzleHttp\Exception\RequestException;
  * @author zozlak
  */
 class Handler {
+
+    static private $fedoraExtentProp      = 'http://www.loc.gov/premis/rdf/v1#hasSize';
+    static private $fedoraLastModDateProp = 'http://fedora.info/definitions/v4/repository#lastModified';
 
     /**
      * Checks resources at the end of transaction
@@ -79,7 +83,7 @@ class Handler {
                                            Doorkeeper $d) {
         $d->log(" post transaction commit handler for: " . $d->getTransactionId());
 
-        // update acdh:hasExtent for collections
+        self::updateCollectionExtent($modResources, $d);
     }
 
     /**
@@ -119,10 +123,15 @@ class Handler {
         try {
             $res->getMetadata();
 
-            // if edit action was not DELETE
-            self::checkIdProp($res, array(), $d);
-            self::checkTitleProp($res, $d);
-            self::generatePid($res, $d);
+            $update = false;
+            $update |= self::checkIdProp($res, array(), $d);
+            $update |= self::checkTitleProp($res, $d);
+            $update |= self::generatePid($res, $d);
+            $update |= self::maintainExtent($res, $d);
+
+            if ($update) {
+                $res->updateMetadata();
+            }
         } catch (RequestException $e) {
             if ($e->getCode() !== 410) {
                 throw $e;
@@ -183,7 +192,7 @@ class Handler {
             if (trim($tmp) === '') {
                 throw new LogicException("fedoraTitleProp value is empty");
             } elseif ($title === '' || $title === $tmp) {
-                return;
+                return false;
             }
         }
 
@@ -192,8 +201,7 @@ class Handler {
             foreach ($searchProps as $prop) {
                 $matches = $metadata->allLiterals($prop);
                 if (count($matches) > 0 && trim($matches[0]) !== '') {
-                    $title  = trim((string) $matches[0]);
-                    $update = true;
+                    $title = trim((string) $matches[0]);
                 }
             }
         }
@@ -203,9 +211,6 @@ class Handler {
             $given  = $metadata->getLiteral('http://xmlns.com/foaf/0.1/givenName');
             $family = $metadata->getLiteral('http://xmlns.com/foaf/0.1/familyName');
             $title  = trim((string) $given . ' ' . (string) $family);
-            if ($title !== '') {
-                $update = true;
-            }
         }
 
         if ($title === '') {
@@ -217,7 +222,7 @@ class Handler {
         $metadata->delete($titleProp);
         $metadata->addLiteral($titleProp, $title);
         $res->setMetadata($metadata);
-        $res->updateMetadata();
+        return true;
     }
 
     /**
@@ -242,11 +247,12 @@ class Handler {
      * @throws LogicException
      */
     static private function checkIdProp(FedoraResource $res, array $txRes,
-                                        Doorkeeper $d) {
+                                        Doorkeeper $d): bool {
         $prop         = RC::idProp();
         $namespace    = RC::idNmsp();
         $ontologyPart = $d->isOntologyPart($res->getUri());
         $metadata     = $res->getMetadata();
+        $update       = false;
 
         if (count($metadata->allLiterals($prop)) > 0) {
             throw new LogicException("fedoraIdProp is a literal");
@@ -308,7 +314,7 @@ class Handler {
 
             $metadata->addResource($prop, $id);
             $res->setMetadata($metadata);
-            $res->updateMetadata();
+            $update = true;
         }
 
         // part of the ontology - exactly one id required
@@ -318,9 +324,11 @@ class Handler {
         if (!$ontologyPart && count($ids) - $acdhIdCount == 0) {
             throw new LogicException('non-ontology resources must have at least one "non-ACDH id" identifier');
         }
+
+        return $update;
     }
 
-    static private function generatePid(FedoraResource $res, Doorkeeper $d) {
+    static private function generatePid(FedoraResource $res, Doorkeeper $d): bool {
         $pidProp = RC::get('epicPidProp');
 
         $metadata = $res->getMetadata();
@@ -335,8 +343,9 @@ class Handler {
 
             $metadata->addResource($pidProp, $pid);
             $res->setMetadata($metadata);
-            $res->updateMetadata();
+            return true;
         }
+        return false;
     }
 
     static private function checkIdRef(FedoraResource $res, array $txRes,
@@ -423,6 +432,71 @@ class Handler {
             if (!in_array($i->res, $delUris)) {
                 throw new LogicException('orphaned reference to fedoraIdProp in ' . $i->res);
             }
+        }
+    }
+
+    static private function maintainExtent(FedoraResource $res, Doorkeeper $d): bool {
+        $meta = $res->getMetadata();
+        $size = $meta->getLiteral(self::$fedoraExtentProp);
+        if ($size !== null) {
+            $acdhSize = $meta->getLiteral(RC::get('fedoraExtentProp'));
+            if ($acdhSize === null || $acdhSize->getValue() !== $size->getValue()) {
+                $meta->addLiteral(RC::get('fedoraExtentProp'), $size);
+                $res->setMetadata($meta);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static private function updateCollectionExtent(array $resources,
+                                                   Doorkeeper $d) {
+        if (count($resources) == 0){
+            return;
+        }
+        
+        $fedora = $d->getFedora();
+        $extProp = RC::get('fedoraExtentProp');
+        $countProp = RC::get('fedoraCountProp');
+        
+        $resQueryParam = array('', RC::relProp(), RC::idProp());
+        $resQueryTmpl = new SimpleQuery('{?@ (?@ / ^?@)+ ?col}');
+        $resQuery = array();
+        foreach($resources as $res) {
+            $resQueryParam[0] = $res->getUri(true);
+            $resQueryTmpl->setValues($resQueryParam);
+            $resQuery[] = $resQueryTmpl->getQuery();
+        }
+        $resQuery = implode("\nUNION ", $resQuery);
+        
+        $query = "
+            SELECT ?col (sum(?colResSize) as ?size) (count(distinct ?colRes) as ?count) 
+            WHERE {
+                {
+                    SELECT DISTINCT ?col 
+                    WHERE {
+                        " . $resQuery . "
+                    }
+                }
+                ?col (?@ / ^?@)* ?colRes .
+                ?colRes ?@ ?colResSize .
+            }
+            GROUP BY ?col
+        ";
+        $param = array(RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
+        $query = new SimpleQuery($query, $param);
+        $results = $fedora->runQuery($query);
+        
+        foreach ($results as $i) {
+            $res = $fedora->getResourceByUri((string) $i->col);
+            $meta = $res->getMetadata();
+            $meta->delete($extProp);
+            $meta->delete($countProp);
+            $meta->addLiteral($extProp, $i->size->getValue());
+            $meta->addLiteral($countProp, $i->count->getValue());
+            $res->setMetadata($meta);
+            $res->updateMetadata();
+            $d->log("  Extent data updated for " . (string) $i->col);
         }
     }
 
