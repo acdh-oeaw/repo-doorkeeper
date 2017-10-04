@@ -3,6 +3,6 @@
         "guzzlehttp/guzzle": "~6.0",
         "zozlak/util": "*",
         "acdh-oeaw/repo-php-util": "~1.1",
-        "acdh-oeaw/epic-handle":"*"
+        "acdh-oeaw/epic-handle": "*"
     }
 }
