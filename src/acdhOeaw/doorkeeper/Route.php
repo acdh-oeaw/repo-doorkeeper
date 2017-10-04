@@ -41,6 +41,14 @@ class Route {
     private $admin;
     private $opts;
 
+    /**
+     * 
+     * @param string $route
+     * @param string $proxyUrl
+     * @param array $roles
+     * @param bool $admin
+     * @param \acdhOeaw\doorkeeper\ProxyOptions $opts
+     */
     public function __construct(string $route, string $proxyUrl,
                                 array $roles = array(), bool $admin = false,
                                 ProxyOptions $opts = null) {
@@ -51,18 +59,36 @@ class Route {
         $this->opts     = $opts ? $opts : new ProxyOptions();
     }
 
+    /**
+     * 
+     * @return string
+     */
     public function getRoute(): string {
         return $this->route;
     }
 
+    /**
+     * 
+     * @return \acdhOeaw\doorkeeper\ProxyOptions
+     */
     public function getProxyOptions(): ProxyOptions {
         return $this->opts;
     }
     
+    /**
+     * 
+     * @param string $reqUri
+     * @return bool
+     */
     public function matches(string $reqUri): bool {
         return preg_match('|^' . $this->route . '|', $reqUri);
     }
 
+    /**
+     * 
+     * @return string
+     * @throws RuntimeException
+     */
     public function authenticate(): string {
         $authData = Auth::authenticate();
 

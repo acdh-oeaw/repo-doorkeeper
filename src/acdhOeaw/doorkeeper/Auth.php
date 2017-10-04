@@ -50,10 +50,18 @@ class Auth {
      */
     static private $authData;
 
+    /**
+     * 
+     * @param PDO $pdo
+     */
     static public function init(PDO $pdo) {
         self::$pdo = $pdo;
     }
 
+    /**
+     * 
+     * @param PDO $pdo
+     */
     static public function initDb(PDO $pdo) {
         $pdo->query("
             CREATE TABLE users (
@@ -71,10 +79,20 @@ class Auth {
         ");
     }
     
+    /**
+     * 
+     * @param string $user
+     * @param string $password
+     * @return string
+     */
     static public function getHttpBasicHeader(string $user, string $password): string {
         return 'Basic ' . base64_encode($user . ':' . $password);
     }
 
+    /**
+     * 
+     * @return \acdhOeaw\doorkeeper\Auth
+     */
     static public function authenticate(): Auth {
         if (self::$authData) {
             return self::$authData;
@@ -102,6 +120,12 @@ class Auth {
         return $authData;
     }
     
+    /**
+     * 
+     * @param string $user
+     * @param string $password
+     * @return bool
+     */
     static public function authUser(string $user, string $password): bool {
         $query = self::$pdo->prepare("SELECT password FROM users WHERE user_id = ?");
         $query->execute(array($user));
@@ -112,12 +136,22 @@ class Auth {
         return false;
     }
     
+    /**
+     * 
+     * @param string $user
+     * @return bool
+     */
     static public function getAdmin(string $user): bool {
         $query = self::$pdo->prepare("SELECT admin FROM users WHERE user_id = ?");
         $query->execute(array($user));
         return $query->fetchColumn();
     }
 
+    /**
+     * 
+     * @param string $user
+     * @return array
+     */
     static public function getRoles(string $user): array {
         $query = self::$pdo->prepare("SELECT role FROM users_roles WHERE user_id = ?");
         $query->execute(array($user));
@@ -128,6 +162,13 @@ class Auth {
         return $roles;
     }
 
+    /**
+     * 
+     * @param string $user
+     * @param string $password
+     * @param array $roles
+     * @throws BadMethodCallException
+     */
     static public function addUser(string $user, string $password,
                                    array $roles = array()) {
         if (strlen($password) < 4) {
@@ -153,6 +194,12 @@ class Auth {
         self::$pdo->commit();
     }
 
+    /**
+     * 
+     * @param string $user
+     * @param string $password
+     * @param array $roles
+     */
     static public function modifyUser(string $user, string $password,
                                       array $roles = array()) {
         self::addUser($user, $password, $roles);
