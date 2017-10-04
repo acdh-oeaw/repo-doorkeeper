@@ -59,6 +59,10 @@ $doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blaz
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 $doorkeeper->registerRoute(new Route('/oai', 'http://oai', array(), false));
 $doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.eos.arz.oeaw.ac.at/services/cmdi2html', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
+$host = filter_input(INPUT_SERVER, 'HTTP_X_FORWARDED_HOST');
+$host = $host ? $host : filter_input(INPUT_SERVER, 'HTTP_HOST');
+$host = explode(',', $host);
+$doorkeeper->registerRoute(new Route('/$', 'https://' . trim($host[0]) . '/browser', array(), false, new ProxyOptions(array('onlyRedirect' => true))));
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: X-Requested-With, Content-Type');
