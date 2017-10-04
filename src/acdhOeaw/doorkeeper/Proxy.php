@@ -93,11 +93,11 @@ class Proxy {
             return;
         }
 
+        $headers = $this->getForwardHeaders($opts);
+
         $method        = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
-        $contentType   = filter_input(INPUT_SERVER, 'CONTENT_TYPE');
-        $contentLength = filter_input(INPUT_SERVER, 'CONTENT_LENGTH');
         $input         = null;
-        if ($method !== 'TRACE' && ($contentType !== null || $contentLength !== null)) {
+        if ($method !== 'TRACE' && (isset($headers['content-type']) || isset($headers['content-length']))) {
             $input = fopen('php://input', 'r');
         }
 
@@ -110,7 +110,6 @@ class Proxy {
         $options['verify']          = false;
         $options['allow_redirects'] = $opts->allowRedirects;
         $client                     = new Client($options);
-        $headers                    = $this->getForwardHeaders($opts);
 
         //$this->doorkeeper->log(json_encode($headers));
         $request = new Request($method, $url, $headers, $input);
@@ -180,7 +179,17 @@ class Proxy {
                 $headers[$k] = $v;
             }
         }
+        
+        $contentType = filter_input(\INPUT_SERVER, 'CONTENT_TYPE');
+        if ($contentType !== null) {
+            $headers['content-type'] = $contentType;
+        }
 
+        $contentLength = filter_input(\INPUT_SERVER, 'CONTENT_LENGTH');
+        if ($contentLength !== null) {
+            $headers['content-length'] = $contentLength;
+        }
+        
         if ($opts->authHeaders) {
             $authData   = Auth::authenticate();
             $cfgPrefix  = $authData->admin ? '' : 'Guest';
