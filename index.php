@@ -62,7 +62,7 @@ $doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.eo
 $host = filter_input(INPUT_SERVER, 'HTTP_X_FORWARDED_HOST');
 $host = $host ? $host : filter_input(INPUT_SERVER, 'HTTP_HOST');
 $host = explode(',', $host);
-$doorkeeper->registerRoute(new Route('/$', 'https://' . trim($host[0]) . '/browser', array(), false, new ProxyOptions(array('onlyRedirect' => true))));
+$doorkeeper->registerRoute(new Route('/$', 'https://' . trim($host[0]) . '/browser/', array(), false, new ProxyOptions(array('onlyRedirect' => true))));
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: X-Requested-With, Content-Type');
