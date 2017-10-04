@@ -73,6 +73,9 @@ class Proxy {
             'Content-Type'        => $contentType,
             'Content-Disposition' => $contentDisposition
         );
+        if (filter_input(INPUT_SERVER, 'HTTP_SLUG')) {
+            $headers['Slug'] = filter_input(INPUT_SERVER, 'HTTP_SLUG');
+        }
         if ($opts->authHeaders) {
             $authData   = Auth::authenticate();
             $cfgPrefix  = $authData->admin ? '' : 'Guest';
