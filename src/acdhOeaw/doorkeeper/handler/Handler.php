@@ -180,8 +180,8 @@ class Handler {
         $metadata = $res->getMetadata();
 
         // special case acdh:hasFirstName and acdh:hasLastName
-        $first = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasFirstName');
-        $last  = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/#hasLastName');
+        $first = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/schema#hasFirstName');
+        $last  = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/schema#hasLastName');
         $title = trim((string) $first . ' ' . (string) $last);
 
         $titles = $metadata->allLiterals($titleProp);
