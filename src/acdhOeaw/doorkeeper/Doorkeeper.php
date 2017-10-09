@@ -520,7 +520,7 @@ class Doorkeeper {
                 // nothing to be done by the doorkeeper - it's handlers responsibility
             }
         }
-        for ($i = 0; $i < count($deletedUris); $i++) {
+        for ($i = 0; $i < count($deletedUuids); $i++) {
             if (isset($uuids[$deletedUuids[$i]])) {
                 $this->log('    removing ' . $deletedUris[$i] . ' from deleted resources list because it was succeeded by ' . $uuids[$deletedUuids[$i]]);
                 unset($deletedUris[$i]);
