@@ -26,6 +26,7 @@
 
 namespace acdhOeaw\doorkeeper\handler;
 
+use DateTime;
 use zozlak\util\UUID;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
@@ -127,6 +128,8 @@ class Handler {
             $update |= self::checkIdProp($res, array(), $d);
             $update |= self::checkTitleProp($res, $d);
             $update |= self::generatePid($res, $d);
+            $update |= self::maintainHosting($res, $d);
+            $update |= self::maintainAvailableDate($res, $d);
             $update |= self::maintainExtent($res, $d);
 
             if ($update) {
@@ -449,6 +452,28 @@ class Handler {
         return false;
     }
 
+    static private function maintainHosting(FedoraResource $res, Doorkeeper $d): bool {
+        $meta = $res->getMetadata();
+        $hosting = $meta->getResource(RC::get('fedoraHostingProp'));
+        if ($hosting === null) {
+            $meta->addResource(RC::get('fedoraHostingProp'), RC::get('fedoraHostingPropDefault'));
+            $res->setMetadata($meta);
+            return true;
+        }
+        return false;
+    }
+    
+    static private function maintainAvailableDate(FedoraResource $res, Doorkeeper $d): bool {
+        $meta = $res->getMetadata();
+        $hosting = $meta->getLiteral(RC::get('fedoraAvailableDateProp'));
+        if ($hosting === null) {
+            $meta->addLiteral(RC::get('fedoraAvailableDateProp'), new DateTime());
+            $res->setMetadata($meta);
+            return true;
+        }
+        return false;
+    }
+    
     static private function updateCollectionExtent(array $resources,
                                                    Doorkeeper $d) {
         if (count($resources) == 0){
