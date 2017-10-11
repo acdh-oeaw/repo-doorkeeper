@@ -32,6 +32,7 @@ use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\exceptions\NotFound;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
+use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\fedora\metadataQuery\QueryParameter;
@@ -139,6 +140,8 @@ class Handler {
             if ($e->getCode() !== 410) {
                 throw $e;
             }
+        } catch (Deleted $e) {
+            
         }
     }
 
