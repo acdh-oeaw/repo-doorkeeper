@@ -51,10 +51,11 @@ use GuzzleHttp\Exception\RequestException;
  */
 class Handler {
 
-    static private $fedoraExtentProp  = 'http://www.loc.gov/premis/rdf/v1#hasSize';
-    static private $fedoraBinaryClass = 'http://fedora.info/definitions/v4/repository#Binary';
-    static private $subclassProp      = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
-    static private $classProp         = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+    static private $fedoraExtentProp   = 'http://www.loc.gov/premis/rdf/v1#hasSize';
+    static private $fedoraBinaryClass  = 'http://fedora.info/definitions/v4/repository#Binary';
+    static private $fedoraMimeTypeProp = 'http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#hasMimeType';
+    static private $subclassProp       = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+    static private $classProp          = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
     static private $repoResClasses;
 
     /**
@@ -136,6 +137,7 @@ class Handler {
             $update |= self::maintainHosting($res, $d);
             $update |= self::maintainAvailableDate($res, $d);
             $update |= self::maintainExtent($res, $d);
+            $update |= self::maintainFormat($res, $d);
 
             if ($update) {
                 $d->log('  updating resource after checks');
@@ -468,11 +470,31 @@ class Handler {
     static private function maintainExtent(FedoraResource $res, Doorkeeper $d): bool {
         $meta = $res->getMetadata();
         $size = $meta->getLiteral(self::$fedoraExtentProp);
-        if ($size !== null) {
-            $acdhSize = $meta->getLiteral(RC::get('fedoraExtentProp'));
+        if ($size !== null && $res->isA(self::$fedoraBinaryClass)) {
+            $prop     = RC::get('fedoraExtentProp');
+            $acdhSize = $meta->getLiteral($prop);
             if ($acdhSize === null || $acdhSize->getValue() !== $size->getValue()) {
-                $meta->addLiteral(RC::get('fedoraExtentProp'), $size);
+                $meta->delete($prop);
+                $meta->addLiteral($prop, $size);
                 $res->setMetadata($meta);
+                $d->log('  ' . $prop . ' added/updated');
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static private function maintainFormat(FedoraResource $res, Doorkeeper $d): bool {
+        $meta = $res->getMetadata();
+        $format = $meta->getLiteral(self::$fedoraMimeTypeProp);
+        if ($format !== null && $res->isA(self::$fedoraBinaryClass)) {
+            $prop     = RC::get('fedoraFormatProp');
+            $acdhFormat = $meta->getLiteral($prop);
+            if ($acdhFormat === null || $acdhFormat->getValue() !== $format->getValue()) {
+                $meta->delete($prop);
+                $meta->addLiteral($prop, $format);
+                $res->setMetadata($meta);
+                $d->log('  ' . $prop . ' added/updated');
                 return true;
             }
         }
