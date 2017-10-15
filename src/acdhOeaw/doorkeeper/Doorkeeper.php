@@ -10,6 +10,7 @@ namespace acdhOeaw\doorkeeper;
 
 use PDO;
 use Exception;
+use Throwable;
 use RuntimeException;
 use LogicException;
 use EasyRdf\Graph;
@@ -278,7 +279,7 @@ class Doorkeeper {
                     }
                 }
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             // this means resource creation/modification went wrong in Fedora and should be reported
             $errors[] = $e;
         }
