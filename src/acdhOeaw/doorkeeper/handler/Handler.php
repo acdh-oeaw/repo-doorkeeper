@@ -27,6 +27,7 @@
 namespace acdhOeaw\doorkeeper\handler;
 
 use DateTime;
+use EasyRdf\Resource;
 use zozlak\util\UUID;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
@@ -50,8 +51,11 @@ use GuzzleHttp\Exception\RequestException;
  */
 class Handler {
 
-    static private $fedoraExtentProp      = 'http://www.loc.gov/premis/rdf/v1#hasSize';
-    static private $fedoraLastModDateProp = 'http://fedora.info/definitions/v4/repository#lastModified';
+    static private $fedoraExtentProp  = 'http://www.loc.gov/premis/rdf/v1#hasSize';
+    static private $fedoraBinaryClass = 'http://fedora.info/definitions/v4/repository#Binary';
+    static private $subclassProp      = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+    static private $classProp         = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+    static private $repoResClasses;
 
     /**
      * Checks resources at the end of transaction
@@ -134,14 +138,29 @@ class Handler {
             $update |= self::maintainExtent($res, $d);
 
             if ($update) {
+                $d->log('  updating resource after checks');
                 $res->updateMetadata();
             }
         } catch (RequestException $e) {
+            $d->log('  ' . $e->getCode() . ' ' . $e->getMessage());
             if ($e->getCode() !== 410) {
                 throw $e;
             }
         } catch (Deleted $e) {
-            
+            $d->log('  ' . $e->getCode() . ' ' . $e->getMessage());
+        }
+    }
+
+    static private function loadOntology(Doorkeeper $d) {
+        if (self::$repoResClasses === null) {
+            $query                = "SELECT ?class where {?class (^?@ / ?@)+ ?@}";
+            $param                = array(RC::idProp(), self::$subclassProp, 'https://vocabs.acdh.oeaw.ac.at/schema#RepoObject');
+            $query                = new SimpleQuery($query, $param);
+            $results              = $d->getFedora()->runQuery($query);
+            self::$repoResClasses = array();
+            foreach ($results as $i) {
+                self::$repoResClasses[] = $i->class->getUri();
+            }
         }
     }
 
@@ -307,7 +326,7 @@ class Handler {
             $matches = array_unique($matches);
 
             if (count($matches) > 1 || count($matches) == 1 && $matches[0] !== $res->getUri(true)) {
-                throw new LogicException("duplicated fedoraIdProp");
+                throw new LogicException("duplicated fedoraIdProp " . $id . ": " . implode(",", $matches));
             }
         }
 
@@ -456,48 +475,65 @@ class Handler {
     }
 
     static private function maintainHosting(FedoraResource $res, Doorkeeper $d): bool {
+        self::loadOntology($d);
         $meta = $res->getMetadata();
-        $hosting = $meta->getResource(RC::get('fedoraHostingProp'));
+
+        if (!self::resIsA($meta, self::$repoResClasses)) {
+            return false;
+        }
+
+        $prop    = RC::get('fedoraHostingProp');
+        $hosting = $meta->getResource($prop);
         if ($hosting === null) {
-            $meta->addResource(RC::get('fedoraHostingProp'), RC::get('fedoraHostingPropDefault'));
+            $meta->addResource($prop, RC::get('fedoraHostingPropDefault'));
             $res->setMetadata($meta);
+            $d->log('  ' . $prop . ' added');
             return true;
         }
         return false;
     }
-    
-    static private function maintainAvailableDate(FedoraResource $res, Doorkeeper $d): bool {
+
+    static private function maintainAvailableDate(FedoraResource $res,
+                                                  Doorkeeper $d): bool {
+        self::loadOntology($d);
         $meta = $res->getMetadata();
-        $hosting = $meta->getLiteral(RC::get('fedoraAvailableDateProp'));
+
+        if (!self::resIsA($meta, self::$repoResClasses)) {
+            return false;
+        }
+
+        $prop    = RC::get('fedoraAvailableDateProp');
+        $hosting = $meta->getLiteral($prop);
         if ($hosting === null) {
-            $meta->addLiteral(RC::get('fedoraAvailableDateProp'), new DateTime());
+            $meta->addLiteral($prop, new DateTime());
             $res->setMetadata($meta);
+            $d->log('  ' . $prop . ' added');
             return true;
         }
         return false;
     }
-    
+
     static private function updateCollectionExtent(array $resources,
                                                    Doorkeeper $d) {
-        if (count($resources) == 0){
+        if (count($resources) == 0) {
             return;
         }
-        
-        $fedora = $d->getFedora();
-        $extProp = RC::get('fedoraExtentProp');
+
+        $fedora    = $d->getFedora();
+        $extProp   = RC::get('fedoraExtentProp');
         $countProp = RC::get('fedoraCountProp');
-        
+
         $resQueryParam = array('', RC::relProp(), RC::idProp());
-        $resQueryTmpl = new SimpleQuery('{?@ (?@ / ^?@)+ ?col}');
-        $resQuery = array();
-        foreach($resources as $res) {
+        $resQueryTmpl  = new SimpleQuery('{?@ (?@ / ^?@)+ ?col}');
+        $resQuery      = array();
+        foreach ($resources as $res) {
             $resQueryParam[0] = $res->getUri(true);
             $resQueryTmpl->setValues($resQueryParam);
-            $resQuery[] = $resQueryTmpl->getQuery();
+            $resQuery[]       = $resQueryTmpl->getQuery();
         }
         $resQuery = implode("\nUNION ", $resQuery);
-        
-        $query = "
+
+        $query   = "
             SELECT ?col (sum(?colResSize) as ?size) (count(distinct ?colRes) as ?count) 
             WHERE {
                 {
@@ -511,12 +547,12 @@ class Handler {
             }
             GROUP BY ?col
         ";
-        $param = array(RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
-        $query = new SimpleQuery($query, $param);
+        $param   = array(RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
+        $query   = new SimpleQuery($query, $param);
         $results = $fedora->runQuery($query);
-        
+
         foreach ($results as $i) {
-            $res = $fedora->getResourceByUri((string) $i->col);
+            $res  = $fedora->getResourceByUri((string) $i->col);
             $meta = $res->getMetadata();
             $meta->delete($extProp);
             $meta->delete($countProp);
@@ -526,6 +562,21 @@ class Handler {
             $res->updateMetadata();
             $d->log("  Extent data updated for " . (string) $i->col);
         }
+    }
+
+    /**
+     * Checks if a given EasyRdf resource (representing a repository resource)
+     * belongs to a given class set.
+     * @param \EasyRdf\Resource $res
+     * @param array $classes
+     */
+    static private function resIsA(Resource $res, array $classes): bool {
+        foreach ($res->allResources(self::$classProp) as $type) {
+            if (in_array($type->getUri(), $classes)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }
