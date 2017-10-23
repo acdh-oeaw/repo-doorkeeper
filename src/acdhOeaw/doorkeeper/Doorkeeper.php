@@ -311,7 +311,7 @@ class Doorkeeper {
                 try {
                     $this->proxy->proxy($this->proxyUrl);
                     $this->fedora->setTransactionId(''); // the transaction doesn't exist anymore at this point
-                    
+
                     $this->log('Waiting for the triplestore sync (' . count($resources) . ' resources)...');
                     $time = $this->waitForTriplesSync(1);
                     $this->log('  ...done (' . $time . ' s)');
@@ -459,27 +459,27 @@ class Doorkeeper {
      * @return int
      */
     private function waitForTriplesSync(int $interval = 1): int {
-        $t = time();
+        $t        = time();
         $syncProp = RC::get('doorkeeperSyncProp');
-        
+
         try {
             $res = $this->fedora->getResourceByUri(RC::get('doorkeeperSyncRes'));
         } catch (NotFound $e) {
             $meta = (new Graph())->resource('.');
             $meta->addLiteral(RC::titleProp(), 'Technical resource used by the doorkeeper');
-            $res = $this->fedora->createResource($meta, '', RC::get('doorkeeperSyncRes'), 'PUT');
+            $res  = $this->fedora->createResource($meta, '', RC::get('doorkeeperSyncRes'), 'PUT');
         }
-        $meta = $res->getMetadata();
+        $meta  = $res->getMetadata();
         $value = $meta->getLiteral($syncProp);
         $value = ($value === null ? 0 : $value->getValue()) + 1;
         $meta->delete($syncProp);
         $meta->addLiteral($syncProp, $value);
         $res->setMetadata($meta);
         $res->updateMetadata();
-        
+
         $param = array($res->getUri(true), $syncProp);
         $query = new SimpleQuery("SELECT ?val WHERE { ?@ ?@ ?val .}", $param);
-        while(true) {
+        while (true) {
             $results = $this->fedora->runQuery($query);
             if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
                 break;

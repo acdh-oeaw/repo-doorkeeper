@@ -36,7 +36,6 @@ use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\metadataQuery\Query;
 use acdhOeaw\fedora\metadataQuery\HasTriple;
-use acdhOeaw\fedora\metadataQuery\QueryParameter;
 use acdhOeaw\fedora\metadataQuery\SimpleQuery;
 use acdhOeaw\epicHandle\HandleService;
 use acdhOeaw\util\RepoConfig as RC;
@@ -72,25 +71,31 @@ class Handler {
                                             Doorkeeper $d) {
         $d->log(" pre transaction commit handler for: " . $d->getTransactionId());
 
+        $modUris = array();
         foreach ($modResources as $i) {
             $d->log('  ' . $i->getUri());
+            $modUris[] = $i->getUri(true);
+
             self::checkIdProp($i, $modResources, $d);
             self::checkTitleProp($i, $d);
             self::checkRelProp($i, $modResources, $delUris, $d);
             self::checkIdRef($i, $modResources, $delUris, $d);
         }
 
+        $d->log(" pre transaction commit handler - checking orphaned relations");
         foreach ($delUris as $i) {
             $d->log('  ' . $i);
-            self::checkOrphanedRelProp($i, $delUris, $d);
+            self::checkOrphanedRelProp($i, $delUris, $modUris, $d);
         }
     }
 
     static public function postTransaction(array $modResources, array $delUris,
                                            Doorkeeper $d) {
-        $d->log(" post transaction commit handler for: " . $d->getTransactionId());
+        $d->log(" post transaction commit handler for " . $d->getTransactionId() . "...");
 
         self::updateCollectionExtent($modResources, $d);
+
+        $d->log("  ...done");
     }
 
     /**
@@ -389,7 +394,7 @@ class Handler {
             foreach ($meta->allResources($prop) as $uri) {
                 $uri = $uri->getUri();
                 if (strpos($uri, $idNmsp) === 0 && !self::checkIfIdExists($uri, $txRes, $delUris, $d)) {
-                    throw new LogicException('metadata refer to a non-existing fedoraId');
+                    throw new LogicException('metadata refer to a non-existing fedoraId ' . $uri);
                 }
             }
         }
@@ -456,12 +461,12 @@ class Handler {
     }
 
     static private function checkOrphanedRelProp($delUri, array $delUris,
-                                                 Doorkeeper $d) {
-        $delId   = QueryParameter::escapeUri($d->getDeletedResourceId($delUri));
-        $query   = sprintf('SELECT DISTINCT ?res WHERE {?res ?prop %s}', $delId);
-        $orphans = $d->getFedora()->runSparql($query);
+                                                 array $modUris, Doorkeeper $d) {
+        $query   = new SimpleQuery('SELECT DISTINCT ?res WHERE {?res ?prop ?@}');
+        $query->setValues(array($d->getDeletedResourceId($delUri)));
+        $orphans = $d->getFedora()->runQuery($query);
         foreach ($orphans as $i) {
-            if (!in_array($i->res, $delUris)) {
+            if (!in_array($i->res, $delUris) && !in_array($i->res, $modUris)) {
                 throw new LogicException('orphaned reference to fedoraIdProp in ' . $i->res);
             }
         }
@@ -485,10 +490,10 @@ class Handler {
     }
 
     static private function maintainFormat(FedoraResource $res, Doorkeeper $d): bool {
-        $meta = $res->getMetadata();
+        $meta   = $res->getMetadata();
         $format = $meta->getLiteral(self::$fedoraMimeTypeProp);
         if ($format !== null && $res->isA(self::$fedoraBinaryClass)) {
-            $prop     = RC::get('fedoraFormatProp');
+            $prop       = RC::get('fedoraFormatProp');
             $acdhFormat = $meta->getLiteral($prop);
             if ($acdhFormat === null || $acdhFormat->getValue() !== $format->getValue()) {
                 $meta->delete($prop);
