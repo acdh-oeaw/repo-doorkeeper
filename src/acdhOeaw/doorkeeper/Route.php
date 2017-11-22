@@ -45,8 +45,9 @@ class Route {
      * 
      * @param string $route
      * @param string $proxyUrl
-     * @param array $roles
-     * @param bool $admin
+     * @param array $roles roles allowed to use this route
+     * @param bool $admin is admin role required (when true, the $roles 
+     *   parameter isn't used in practice)
      * @param \acdhOeaw\doorkeeper\ProxyOptions $opts
      */
     public function __construct(string $route, string $proxyUrl,
