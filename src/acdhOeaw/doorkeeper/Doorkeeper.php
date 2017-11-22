@@ -253,6 +253,10 @@ class Doorkeeper {
             }
 
             $response = $this->proxy->proxy($this->proxyUrl);
+            if ((int)($response->getStatusCode() / 100) !== 2) {
+                throw new RuntimeException($response->getStatusCode() . " " . $response->getReasonPhrase(), $response->getStatusCode());
+            }
+            
             if ($this->method === 'POST' || $response->getStatusCode() == 201) {
                 $resourceId = $this->extractResourceId($this->parseLocations($response));
                 $query->execute(array($this->transactionId, $resourceId, null));
@@ -267,7 +271,6 @@ class Doorkeeper {
                 }
             } else if (!$tombstone) {
                 $resourceId = $this->extractResourceId($this->resourceId);
-                $this->log($this->resourceId . ' # ' . $resourceId);
                 $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
                 foreach ($this->postEditHandlers as $i) {
