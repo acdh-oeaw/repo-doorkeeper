@@ -122,10 +122,6 @@ class Proxy {
             $response = $e->getResponse();
 
             // place debugging code here
-            if (preg_match('/browser/', $url)) {
-                echo $response->getStatusCode() . " ###\n";
-                print_r($response->getHeaders());
-            }
         } finally {
             if ($input) {
                 fclose($input);
