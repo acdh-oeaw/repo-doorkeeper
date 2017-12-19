@@ -562,7 +562,7 @@ class Handler {
                 $collections[] = $j->col->getUri();
             }
         }
-        $collections = array_unique($collections);
+        $collections = array_values(array_unique($collections));
 
         $query = new SimpleQuery("
             SELECT (sum(?colResSize) as ?size) (count(distinct ?colRes) as ?count) 
@@ -574,6 +574,7 @@ class Handler {
         ");
         $param = array('', RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
         foreach ($collections as $n => $i) {
+            $d->log("  Updating extent for $i ... (" . ($n + 1) . "/" . count($collections) . ")");
             $param[0] = $i;
             $query->setValues($param);
             $results  = $fedora->runQuery($query);
@@ -584,14 +585,14 @@ class Handler {
                 $size  = $count = 0;
             }
             $res  = $fedora->getResourceByUri($i);
-            $meta = $res->getMetadata();
+            $meta = $res->getMetadata(true);
             $meta->delete($extProp);
             $meta->delete($countProp);
             $meta->addLiteral($extProp, $size);
             $meta->addLiteral($countProp, $count);
             $res->setMetadata($meta);
             $res->updateMetadata();
-            $d->log("  Extent updated for " . $i . ": size $size count $count (" . ($n + 1) . "/" . count($collections) . ")");
+            $d->log("    ...size $size count $count");
         }
     }
 

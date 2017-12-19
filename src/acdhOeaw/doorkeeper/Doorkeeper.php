@@ -559,7 +559,7 @@ class Doorkeeper {
             }
         }
 
-        $parents = array_unique($parents);
+        $parents = array_values(array_unique($parents));
         return array($resources, $deletedUris, $parents);
     }
 
