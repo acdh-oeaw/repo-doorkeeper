@@ -20,6 +20,7 @@ use GuzzleHttp\Psr7\Response;
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
+use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\exceptions\NotFound;
@@ -50,6 +51,7 @@ class Doorkeeper {
                 transaction_id varchar(255) references transactions (transaction_id) on delete cascade, 
                 resource_id varchar(255), 
                 acdh_id varchar(255),
+                parents varchar(8000),
                 primary key (transaction_id, resource_id)
             )
         ");
@@ -236,15 +238,22 @@ class Doorkeeper {
         ");
         try {
             $acdhId    = null;
+            $meta      = null;
             $tombstone = preg_match('|/fcr:tombstone$|', $this->proxyUrl);
             if ($this->method === 'DELETE' && !$tombstone) {
                 try {
                     $res        = $this->fedora->getResourceByUri($this->proxyUrl);
                     $acdhId     = $res->getId();
                     $resourceId = $this->extractResourceId($this->proxyUrl);
+                    $meta       = $res->getMetadata();
 
-                    $updateQuery = $this->pdo->prepare("UPDATE resources SET acdh_id = ? WHERE transaction_id = ? AND resource_id = ?");
-                    $updateQuery->execute(array($acdhId, $this->transactionId, $resourceId));
+                    $updateQuery = $this->pdo->prepare("
+                        UPDATE resources 
+                        SET acdh_id = ?
+                        WHERE transaction_id = ? AND resource_id = ?
+                    ");
+                    $param       = array($acdhId, $this->transactionId, $resourceId);
+                    $updateQuery->execute($param);
                 } catch (NoAcdhId $e) {
                     if (!$this->isOntologyPart($this->proxyUrl)) {
                         throw $e;
@@ -253,17 +262,18 @@ class Doorkeeper {
             }
 
             $response = $this->proxy->proxy($this->proxyUrl);
-            if ((int)($response->getStatusCode() / 100) !== 2) {
+            if ((int) ($response->getStatusCode() / 100) !== 2) {
                 throw new RuntimeException($response->getStatusCode() . " " . $response->getReasonPhrase(), $response->getStatusCode());
             }
-            
+
             if ($this->method === 'POST' || $response->getStatusCode() == 201) {
                 $resourceId = $this->extractResourceId($this->parseLocations($response));
                 $query->execute(array($this->transactionId, $resourceId, null));
 
+                $res  = $this->fedora->getResourceByUri($resourceId);
+                $meta = $res->getMetadata();
                 foreach ($this->postCreateHandlers as $i) {
                     try {
-                        $res = $this->fedora->getResourceByUri($resourceId);
                         $i($res, $this);
                     } catch (LogicException $e) {
                         $errors[] = $e;
@@ -273,15 +283,29 @@ class Doorkeeper {
                 $resourceId = $this->extractResourceId($this->resourceId);
                 $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
+                $res  = $this->fedora->getResourceByUri($resourceId);
+                $meta = $res->getMetadata();
                 foreach ($this->postEditHandlers as $i) {
                     try {
-                        $res = $this->fedora->getResourceByUri($resourceId);
                         $i($res, $this);
                     } catch (LogicException $e) {
                         $errors[] = $e;
                     }
                 }
             }
+
+            // save information on parents
+            $parents = array();
+            foreach ($res->getMetadata()->allResources(RC::relProp()) as $i) {
+                $parents[] = $i->getUri();
+            }
+            $parentsQuery = $this->pdo->prepare("
+                UPDATE resources 
+                SET parents = ?
+                WHERE transaction_id = ? AND resource_id = ?
+            ");
+            $param        = array(json_encode($parents), $this->transactionId, $resourceId);
+            $parentsQuery->execute($param);
         } catch (Throwable $e) {
             // this means resource creation/modification went wrong in Fedora and should be reported
             $errors[] = $e;
@@ -299,7 +323,7 @@ class Doorkeeper {
             }
         } else {
             // check the transaction
-            list($resources, $deletedUris) = $this->checkTransactionResources();
+            list($resources, $deletedUris, $parents) = $this->checkTransactionResources();
             $this->fedora->prolong();
             foreach ($this->preCommitHandlers as $i) {
                 try {
@@ -327,7 +351,7 @@ class Doorkeeper {
             if (count($errors) == 0) {
                 foreach ($this->postCommitHandlers as $i) {
                     try {
-                        $i($resources, $deletedUris, $this);
+                        $i($resources, $deletedUris, $parents, $this);
                     } catch (Exception $e) {
                         $errors[] = $e;
                     }
@@ -497,19 +521,23 @@ class Doorkeeper {
      * - if they still exist
      * - if deleted ones were not replaced by the newly created/modified ones
      * - what is their latest modification date
+     * 
+     * Includes also a list of all parents of resources affected by the 
+     * transaction (created/modified/deleted)
      * @return array
      */
     private function checkTransactionResources(): array {
-        // COMMIT - check resources integrity
-        $query = $this->pdo->prepare("SELECT resource_id, acdh_id FROM resources WHERE transaction_id = ?");
+        $query = $this->pdo->prepare("SELECT resource_id, acdh_id, parents FROM resources WHERE transaction_id = ?");
         $query->execute(array($this->transactionId));
 
         $resources    = array();
         $deletedUris  = array();
         $uuids        = array();
         $deletedUuids = array();
+        $parents      = array();
 
         while ($i = $query->fetch(PDO::FETCH_OBJ)) {
+            $parents = array_merge($parents, json_decode($i->parents));
             try {
                 $res                  = $this->fedora->getResourceByUri($i->resource_id);
                 $resources[]          = $res;
@@ -531,7 +559,8 @@ class Doorkeeper {
             }
         }
 
-        return array($resources, $deletedUris);
+        $parents = array_unique($parents);
+        return array($resources, $deletedUris, $parents);
     }
 
 }

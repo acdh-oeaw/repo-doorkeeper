@@ -72,8 +72,8 @@ class Handler {
         $d->log(" pre transaction commit handler for: " . $d->getTransactionId());
 
         $modUris = array();
-        foreach ($modResources as $i) {
-            $d->log('  ' . $i->getUri());
+        foreach ($modResources as $n => $i) {
+            $d->log('  ' . $i->getUri() . " (" . ($n + 1) . "/" . count($modResources) . ")");
             $modUris[] = $i->getUri(true);
 
             self::checkIdProp($i, $modResources, $d);
@@ -83,17 +83,17 @@ class Handler {
         }
 
         $d->log(" pre transaction commit handler - checking orphaned relations");
-        foreach ($delUris as $i) {
-            $d->log('  ' . $i);
+        foreach ($delUris as $n => $i) {
+            $d->log('  ' . $i . " (" . ($n + 1) . "/" . count($delUris) . ")");
             self::checkOrphanedRelProp($i, $delUris, $modUris, $d);
         }
     }
 
     static public function postTransaction(array $modResources, array $delUris,
-                                           Doorkeeper $d) {
+                                           array $parents, Doorkeeper $d) {
         $d->log(" post transaction commit handler for " . $d->getTransactionId() . "...");
 
-        self::updateCollectionExtent($modResources, $d);
+        self::updateCollectionExtent($parents, $d);
 
         $d->log("  ...done");
     }
@@ -545,54 +545,53 @@ class Handler {
         return false;
     }
 
-    static private function updateCollectionExtent(array $resources,
-                                                   Doorkeeper $d) {
-        if (count($resources) == 0) {
-            return;
-        }
-
+    static private function updateCollectionExtent(array $parents, Doorkeeper $d) {
         $fedora    = $d->getFedora();
         $extProp   = RC::get('fedoraExtentProp');
         $countProp = RC::get('fedoraCountProp');
 
-        $resQueryParam = array('', RC::relProp(), RC::idProp());
-        $resQueryTmpl  = new SimpleQuery('{?@ (?@ / ^?@)+ ?col}');
-        $resQuery      = array();
-        foreach ($resources as $res) {
-            $resQueryParam[0] = $res->getUri(true);
-            $resQueryTmpl->setValues($resQueryParam);
-            $resQuery[]       = $resQueryTmpl->getQuery();
+        $collections = array();
+        $query       = new SimpleQuery('SELECT * WHERE {?@ ^?@ / (?@ / ^?@)* ?col}');
+        $queryParam  = array('', RC::idProp(), RC::relProp(), RC::idProp());
+        foreach ($parents as $n => $i) {
+            $d->log("  Collecting parent resources list (" . ($n + 1) . "/" . count($parents) . ")");
+            $queryParam[0] = $i;
+            $query->setValues($queryParam);
+            $results       = $fedora->runQuery($query);
+            foreach ($results as $j) {
+                $collections[] = $j->col->getUri();
+            }
         }
-        $resQuery = implode("\nUNION ", $resQuery);
+        $collections = array_unique($collections);
 
-        $query   = "
-            SELECT ?col (sum(?colResSize) as ?size) (count(distinct ?colRes) as ?count) 
+        $query = new SimpleQuery("
+            SELECT (sum(?colResSize) as ?size) (count(distinct ?colRes) as ?count) 
             WHERE {
-                {
-                    SELECT DISTINCT ?col 
-                    WHERE {
-                        " . $resQuery . "
-                    }
-                }
-                ?col (?@ / ^?@)* ?colRes .
+                ?@ (?@ / ^?@)* ?colRes .
                 ?colRes ?@ ?colResSize .
             }
             GROUP BY ?col
-        ";
-        $param   = array(RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
-        $query   = new SimpleQuery($query, $param);
-        $results = $fedora->runQuery($query);
-
-        foreach ($results as $i) {
-            $res  = $fedora->getResourceByUri((string) $i->col);
+        ");
+        $param = array('', RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
+        foreach ($collections as $n => $i) {
+            $param[0] = $i;
+            $query->setValues($param);
+            $results  = $fedora->runQuery($query);
+            if (count($results) > 0) {
+                $size  = $results[0]->size->getValue();
+                $count = $results[0]->count->getValue();
+            } else {
+                $size  = $count = 0;
+            }
+            $res  = $fedora->getResourceByUri($i);
             $meta = $res->getMetadata();
             $meta->delete($extProp);
             $meta->delete($countProp);
-            $meta->addLiteral($extProp, $i->size->getValue());
-            $meta->addLiteral($countProp, $i->count->getValue());
+            $meta->addLiteral($extProp, $size);
+            $meta->addLiteral($countProp, $count);
             $res->setMetadata($meta);
             $res->updateMetadata();
-            $d->log("  Extent data updated for " . (string) $i->col);
+            $d->log("  Extent updated for " . $i . ": size $size count $count (" . ($n + 1) . "/" . count($collections) . ")");
         }
     }
 
