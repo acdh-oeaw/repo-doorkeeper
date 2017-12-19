@@ -16,13 +16,12 @@ use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-RC::init('config.ini');
+RC::init(__DIR__ . '/../config.ini');
 $fedora = new Fedora();
 $idProp = RC::idProp();
 $meta   = (new Graph())->resource('.');
 $meta->addLiteral(RC::titleProp(), 'test resource');
 $meta->addResource($idProp, 'http://random.id/' . rand());
-
 
 ##########
 echo "a resource can be deleted within the session\n";
@@ -36,7 +35,6 @@ echo "a resource can be deleted between sessions\n";
 $fedora->begin();
 $res = $fedora->createResource($meta);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
 $fedora->begin();
 $res = $fedora->getResourceByUri($res->getUri());
 $res->delete();
@@ -52,7 +50,6 @@ $meta2->addResource('https://my.ow/property', $res1->getId());
 $meta2->addResource($idProp, 'http://random.id/' . rand());
 $res2  = $fedora->createResource($meta2);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
 $fedora->begin();
 $res1  = $fedora->getResourceByUri($res1->getUri());
 $res1->delete();
