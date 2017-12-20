@@ -565,12 +565,11 @@ class Handler {
         $collections = array_values(array_unique($collections));
 
         $query = new SimpleQuery("
-            SELECT (sum(?colResSize) as ?size) (count(distinct ?colRes) as ?count) 
+            SELECT (sum(?colResSize) as ?size) (count(?res) as ?count) 
             WHERE {
-                ?@ (?@ / ^?@)* ?colRes .
-                ?colRes ?@ ?colResSize .
+                {SELECT DISTINCT (?colRes AS ?res) WHERE { ?@ (?@ / ^?@)* ?colRes . }}
+                ?res ?@ ?colResSize .
             }
-            GROUP BY ?col
         ");
         $param = array('', RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
         foreach ($collections as $n => $i) {
