@@ -23,9 +23,10 @@ class Proxy {
 
     /**
      * Response headers not to be forwarded to the client.
+     * (https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers#hbh plus host header)
      * @var array
      */
-    static $skipResponseHeaders = array('transfer-encoding', 'host');
+	static $skipResponseHeaders = array('connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host');
 
     /**
      * Gets an original (before being proxied) HTTP header value.
