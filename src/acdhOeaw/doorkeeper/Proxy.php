@@ -95,8 +95,8 @@ class Proxy {
 
         $headers = $this->getForwardHeaders($opts);
 
-        $method        = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
-        $input         = null;
+        $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
+        $input  = null;
         if ($method !== 'TRACE' && (isset($headers['content-type']) || isset($headers['content-length']))) {
             $input = fopen('php://input', 'r');
         }
@@ -121,7 +121,21 @@ class Proxy {
             }
             $response = $e->getResponse();
 
-            // place debugging code here
+            if ($input) {
+                fclose($input);
+                $input = null;
+            }
+            $request = $e->getRequest();
+            $uri     = $request->getUri();
+            $this->doorkeeper->log('    ' . json_encode(array(
+                    'PROXY ERROR',
+                    $response->getStatusCode(),
+                    $response->getReasonPhrase(),
+                    $request->getMethod(),
+                    $uri->getScheme() . '://' . $uri->getHost() . $uri->getPath(),
+                    $request->getHeaders(),
+                    $request->getBody()
+            )));
         } finally {
             if ($input) {
                 fclose($input);
@@ -175,7 +189,7 @@ class Proxy {
                 $headers[$k] = $v;
             }
         }
-        
+
         $contentType = filter_input(\INPUT_SERVER, 'CONTENT_TYPE');
         if ($contentType !== null) {
             $headers['content-type'] = $contentType;
@@ -185,7 +199,7 @@ class Proxy {
         if ($contentLength !== null) {
             $headers['content-length'] = $contentLength;
         }
-        
+
         if ($opts->authHeaders) {
             $authData   = Auth::authenticate();
             $cfgPrefix  = $authData->admin ? '' : 'Guest';
