@@ -95,6 +95,11 @@ class Proxy {
         }
 
         $headers = $this->getForwardHeaders($opts);
+        //TODO quick and dirty - make it nicer - the problem is to make `curl -L -H "Accept: application/x-cmdi+xml" http://hdl.handle.net/11022/0000-0007-C094-8` work and Fedora returns 406 when you try to fetch a binary with an accept header different from the resource's mime type
+        $tmp = RC::get('fedoraApiUrl');
+        if (!preg_match('|/fcr:metadata/?$|', $url) && substr($url, 0, strlen($tmp)) === $tmp) {
+            $headers['accept'] = '*';
+        }
 
         $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $input  = null;
