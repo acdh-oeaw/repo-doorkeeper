@@ -239,6 +239,7 @@ class Doorkeeper {
         try {
             $acdhId    = null;
             $meta      = null;
+            $parents   = array();
             $tombstone = preg_match('|/fcr:tombstone$|', $this->proxyUrl);
             if ($this->method === 'DELETE' && !$tombstone) {
                 try {
@@ -254,6 +255,10 @@ class Doorkeeper {
                     ");
                     $param       = array($acdhId, $this->transactionId, $resourceId);
                     $updateQuery->execute($param);
+
+                    foreach ($meta->allResources(RC::relProp()) as $i) {
+                        $parents[] = $i->getUri();
+                    }
                 } catch (NoAcdhId $e) {
                     if (!$this->isOntologyPart($this->proxyUrl)) {
                         throw $e;
@@ -295,9 +300,10 @@ class Doorkeeper {
             }
 
             // save information on parents
-            $parents = array();
-            foreach ($res->getMetadata()->allResources(RC::relProp()) as $i) {
-                $parents[] = $i->getUri();
+            if ($this->method !== 'DELETE') {
+                foreach ($res->getMetadata()->allResources(RC::relProp()) as $i) {
+                    $parents[] = $i->getUri();
+                }
             }
             $parentsQuery = $this->pdo->prepare("
                 UPDATE resources 
