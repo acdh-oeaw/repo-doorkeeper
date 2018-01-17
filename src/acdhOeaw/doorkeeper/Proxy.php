@@ -95,12 +95,7 @@ class Proxy {
         }
 
         $headers = $this->getForwardHeaders($opts);
-        //TODO quick and dirty - make it nicer - the problem is to make `curl -L -H "Accept: application/x-cmdi+xml" http://hdl.handle.net/11022/0000-0007-C094-8` work and Fedora returns 406 when you try to fetch a binary with an accept header different from the resource's mime type
-        $tmp = RC::get('fedoraApiUrl');
-        if (!preg_match('|/fcr:metadata/?$|', $url) && substr($url, 0, strlen($tmp)) === $tmp) {
-            $headers['accept'] = '*';
-        }
-
+       
         $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $input  = null;
         if ($method !== 'TRACE' && (isset($headers['content-type']) || isset($headers['content-length']))) {
@@ -233,6 +228,16 @@ class Proxy {
             if (count($cookies) > 0) {
                 $headers['cookie'] = implode('; ', $cookies);
             }
+        }
+
+        // Fedora compares the accept header to the binary resource's mime type and sends 406 when they don't match
+        // It causes `curl -L -H "Accept: application/x-cmdi+xml" http://hdl.handle.net/11022/0000-0007-C094-8` to fail with 406 (cause curl sends the original accept header to all subsequent redirects)
+        // An easy and quite nice workaround is to make sure that "*/*" mime type is always set with the lowest weight
+        if (!isset($headers['accept'])) {
+            $headers['accept'] = '';
+        }
+        if (strpos($headers['accept'], '*/*') === false) {
+            $headers['accept'] .= ($headers['accept'] !== '' ? ',' : '').'*/*;q=0.1';
         }
 
         return $headers;
