@@ -271,7 +271,7 @@ class Doorkeeper {
                 throw new RuntimeException($response->getStatusCode() . " " . $response->getReasonPhrase(), $response->getStatusCode());
             }
 
-            if ($this->method === 'POST' || $response->getStatusCode() == 201) {
+            if ($this->method === 'POST' || $response->getStatusCode() == 201 && $this->method !== 'MOVE') {
                 $resourceId = $this->extractResourceId($this->parseLocations($response));
                 $query->execute(array($this->transactionId, $resourceId, null));
 
@@ -285,6 +285,10 @@ class Doorkeeper {
                     }
                 }
             } else if (!$tombstone) {
+                if ($this->method === 'MOVE') {
+                    $this->log('    Moved to: ' . $this->parseLocations($response));
+                    $this->resourceId = $this->extractResourceId($this->parseLocations($response));
+                }
                 $resourceId = $this->extractResourceId($this->resourceId);
                 $query->execute(array($this->transactionId, $resourceId, $acdhId));
 
@@ -406,7 +410,7 @@ class Doorkeeper {
         }
 
         if (!in_array($this->method, array('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT',
-                'PATCH', 'DELETE'))) {
+                'PATCH', 'DELETE', 'MOVE'))) {
             header('HTTP/1.1 405 Method Not Supported by the doorkeeper');
             return false;
         }

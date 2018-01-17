@@ -47,7 +47,7 @@ if ($initDb) {
 $pdo->query("DELETE FROM resources");
 $pdo->query("DELETE FROM transactions");
 
-// create an admin user entry
+// create admin user entries
 $users = array();
 $users[RC::get('fedoraUser')] = RC::get('fedoraPswd');
 $users['resolver'] = RC::get('resolverPswd');
@@ -58,6 +58,16 @@ foreach ($users as $user => $pswd) {
     $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
     $query->execute(array($user));
     $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 1)");
+    $query->execute(array($user, password_hash($pswd, PASSWORD_DEFAULT)));
+}
+// create normal user entries
+$users = array();
+foreach ($users as $user => $pswd) {
+    $query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
+    $query->execute(array($user));
+    $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+    $query->execute(array($user));
+    $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 0)");
     $query->execute(array($user, password_hash($pswd, PASSWORD_DEFAULT)));
 }
 
