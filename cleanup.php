@@ -1,6 +1,6 @@
 <?php
 
-/* 
+/*
  * The MIT License
  *
  * Copyright 2017 Austrian Centre for Digital Humanities at the Austrian Academy of Sciences
@@ -36,7 +36,7 @@ RC::init(__DIR__ . '/config.ini');
 
 $dbFile = __DIR__ . '/db.sqlite';
 $initDb = !file_exists($dbFile);
-$pdo = new PDO('sqlite:' . $dbFile);
+$pdo    = new PDO('sqlite:' . $dbFile);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 if ($initDb) {
     Doorkeeper::initDb($pdo);
@@ -48,27 +48,43 @@ $pdo->query("DELETE FROM resources");
 $pdo->query("DELETE FROM transactions");
 
 // create admin user entries
-$users = array();
+$users                        = [];
 $users[RC::get('fedoraUser')] = RC::get('fedoraPswd');
-$users['resolver'] = RC::get('resolverPswd');
-$users['oai'] = RC::get('oaiPswd');
+$users['resolver']            = RC::get('resolverPswd');
+$users['oai']                 = RC::get('oaiPswd');
 foreach ($users as $user => $pswd) {
     $query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
-    $query->execute(array($user));
+    $query->execute([$user]);
     $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
-    $query->execute(array($user));
+    $query->execute([$user]);
     $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 1)");
-    $query->execute(array($user, password_hash($pswd, PASSWORD_DEFAULT)));
+    $query->execute([$user, password_hash($pswd, PASSWORD_DEFAULT)]);
 }
 // create normal user entries
-$users = array();
-foreach ($users as $user => $pswd) {
-    $query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
-    $query->execute(array($user));
-    $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
-    $query->execute(array($user));
-    $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 0)");
-    $query->execute(array($user, password_hash($pswd, PASSWORD_DEFAULT)));
+try {
+    $file = RC::get('doorkeeperUsersDbFile');
+    $file = __DIR__ . '/' . $file;
+    if (file_exists($file)) {
+        $users = json_decode(file_get_contents($file));
+        foreach ($users as $i) {
+            if (substr($i->pswd, 0, 1) !== '$') {
+                $i->pswd = password_hash($i->pswd, PASSWORD_DEFAULT);
+            }
+            $query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
+            $query->execute([$i->user]);
+            $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+            $query->execute([$i->user]);
+            $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 0)");
+            $query->execute([$i->user, $i->pswd]);
+            $query = $pdo->prepare("INSERT INTO users_roles (user_id, role) VALUES (?, ?)");
+            foreach ($i->roles as $j) {
+                $query->execute([$i->user, $j]);
+            }
+        }
+        file_put_contents($file, json_encode($users));
+    }
+} catch (InvalidArgumentException $ex) {
+    
 }
 
 echo "  Doorkeeper database cleanup successful\n";

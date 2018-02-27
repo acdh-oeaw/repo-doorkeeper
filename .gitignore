@@ -5,3 +5,4 @@
 /*.sparql
 *.sqlite
 /*log
+/users.json
