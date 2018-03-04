@@ -30,6 +30,7 @@ use zozlak\util\ClassLoader;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\doorkeeper\Auth;
 use acdhOeaw\doorkeeper\Route;
+use acdhOeaw\doorkeeper\RouteBlazegraph;
 use acdhOeaw\doorkeeper\ProxyOptions;
 use acdhOeaw\util\RepoConfig as RC;
 use EasyRdf\RdfNamespace;
@@ -55,7 +56,7 @@ $doorkeeper->registerPostCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::po
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
 $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::checkEdit');
 
-$doorkeeper->registerRoute(new Route('/blazegraph', 'http://blazegraph:9999/blazegraph', array('resolver', 'oai'), false));
+$doorkeeper->registerRoute(new RouteBlazegraph('/blazegraph', 'http://blazegraph:9999/blazegraph', array(), false));
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 $doorkeeper->registerRoute(new Route('/oai', 'http://oai', array(), false));
 $doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.eos.arz.oeaw.ac.at/services/cmdi2html', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
