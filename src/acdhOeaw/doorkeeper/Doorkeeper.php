@@ -452,15 +452,9 @@ class Doorkeeper {
         return $location;
     }
 
-    public function e($str) {
-        $f = fopen('php://stdout', 'w');
-        fwrite($f, $str);
-        fclose($f);
-    }
-
     private function sendRequest($method, $url, $headers = array(), $body = null): Response {
         $headers['Authorization'] = self::getAuthHeader();
-        $request                  = new Request('POST', $url, $headers, $body);
+        $request                  = new Request($method, $url, $headers, $body);
         $client                   = new Client();
         return $client->send($request);
     }
