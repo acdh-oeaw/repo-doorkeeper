@@ -81,7 +81,7 @@ try {
                 $query->execute([$i->user, $j]);
             }
         }
-        file_put_contents($file, json_encode($users));
+        file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT));
     }
 } catch (InvalidArgumentException $ex) {
     
