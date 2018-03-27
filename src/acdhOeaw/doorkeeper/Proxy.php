@@ -44,7 +44,8 @@ class Proxy {
      * (https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers#hbh plus host header)
      * @var array
      */
-	static $skipResponseHeaders = array('connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host');
+    static $skipResponseHeaders = array('connection', 'keep-alive', 'proxy-authenticate',
+        'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host');
 
     /**
      * Gets an original (before being proxied) HTTP header value.
@@ -113,7 +114,7 @@ class Proxy {
         }
 
         $headers = $this->getForwardHeaders($opts);
-       
+
         $method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $input  = null;
         if ($method !== 'TRACE' && (isset($headers['content-type']) || isset($headers['content-length']))) {
@@ -178,16 +179,16 @@ class Proxy {
             if ($authData->user == Auth::DEFAULT_USER) {
                 header('HTTP/1.1 401 Unauthorized');
                 header('WWW-Authenticate: Basic realm="repository"');
+                return;
             }
-        } else {
-            header('HTTP/1.1 ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
-            foreach ($response->getHeaders() as $name => $values) {
-                if (in_array(strtolower($name), self::$skipResponseHeaders)) {
-                    continue;
-                }
-                foreach ($values as $value) {
-                    header(sprintf('%s: %s', $name, $value), false);
-                }
+        }
+        header('HTTP/1.1 ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
+        foreach ($response->getHeaders() as $name => $values) {
+            if (in_array(strtolower($name), self::$skipResponseHeaders)) {
+                continue;
+            }
+            foreach ($values as $value) {
+                header(sprintf('%s: %s', $name, $value), false);
             }
         }
     }
@@ -255,7 +256,7 @@ class Proxy {
             $headers['accept'] = '';
         }
         if (strpos($headers['accept'], '*/*') === false) {
-            $headers['accept'] .= ($headers['accept'] !== '' ? ',' : '').'*/*;q=0.1';
+            $headers['accept'] .= ($headers['accept'] !== '' ? ',' : '') . '*/*;q=0.1';
         }
 
         return $headers;
