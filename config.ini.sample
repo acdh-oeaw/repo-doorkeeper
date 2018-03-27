@@ -12,6 +12,7 @@ epicPswd="***"
 epicResolver="http://hdl.handle.net/"
 epicPidProp="https://vocabs.acdh.oeaw.ac.at/schema#pid"
 
+doorkeeperReadOnly=false
 doorkeeperBaseUrl="/rest/"
 doorkeeperLogFile="log"
 doorkeeperOntologyLabelProp="http://www.w3.org/2000/01/rdf-schema#label"

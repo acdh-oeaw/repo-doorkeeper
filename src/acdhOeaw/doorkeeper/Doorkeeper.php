@@ -97,6 +97,7 @@ class Doorkeeper {
     private $postEditHandlers   = array();
     private $logFile;
     private $routes             = array();
+    private $readOnlyMode       = false;
 
     public function __construct(PDO $pdo) {
         Auth::init($pdo);
@@ -171,6 +172,10 @@ class Doorkeeper {
 
     public function registerRoute(Route $route) {
         $this->routes[$route->getRoute()] = $route;
+    }
+
+    public function setReadOnlyMode(bool $mode) {
+        $this->readOnlyMode = $mode;
     }
 
     public function getDeletedResourceId(string $uri): string {
@@ -399,6 +404,10 @@ class Doorkeeper {
     }
 
     private function handleTransactionBegin() {
+        if ($this->readOnlyMode) {
+            header('HTTP/1.1 503 Repository is in the read-only mode');
+            return;
+        }
         // pass request, check if it was successfull and if so, save the transaction id in the database
         try {
             $response = $this->proxy->proxy($this->proxyUrl);

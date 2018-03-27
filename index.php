@@ -51,6 +51,8 @@ if ($initDb) {
 
 $doorkeeper = new Doorkeeper($pdo);
 
+$doorkeeper->setReadOnlyMode(RC::get('doorkeeperReadOnly'));
+
 $doorkeeper->registerPreCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::checkTransaction');
 $doorkeeper->registerPostCommitHandler('\acdhOeaw\doorkeeper\handler\Handler::postTransaction');
 $doorkeeper->registerPostCreateHandler('\acdhOeaw\doorkeeper\handler\Handler::checkCreate');
