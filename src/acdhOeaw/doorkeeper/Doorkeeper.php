@@ -384,6 +384,9 @@ class Doorkeeper {
                         $errors[] = $e;
                     }
                 }
+                $this->log('Waiting for the triplestore sync...');
+                $time = $this->waitForTriplesSync(1);
+                $this->log('  ...done (' . $time . ' s)');
             }
         }
 
