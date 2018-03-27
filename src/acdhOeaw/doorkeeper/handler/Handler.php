@@ -27,10 +27,19 @@
 namespace acdhOeaw\doorkeeper\handler;
 
 use DateTime;
+use LogicException;
+use RuntimeException;
+use EasyRdf\Literal;
+use EasyRdf\Literal\Boolean as lBoolean;
+use EasyRdf\Literal\Date as lDate;
+use EasyRdf\Literal\DateTime as lDateTime;
+use EasyRdf\Literal\Decimal as lDecimal;
+use EasyRdf\Literal\Integer as lInteger;
 use EasyRdf\Resource;
-use zozlak\util\UUID;
+use GuzzleHttp\Exception\RequestException;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
+use acdhOeaw\fedora\acl\WebAclRule as WAR;
 use acdhOeaw\fedora\exceptions\NotFound;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\exceptions\Deleted;
@@ -39,9 +48,7 @@ use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\fedora\metadataQuery\SimpleQuery;
 use acdhOeaw\epicHandle\HandleService;
 use acdhOeaw\util\RepoConfig as RC;
-use RuntimeException;
-use LogicException;
-use GuzzleHttp\Exception\RequestException;
+use zozlak\util\UUID;
 
 /**
  * Implements the ACDH business logic
@@ -50,12 +57,26 @@ use GuzzleHttp\Exception\RequestException;
  */
 class Handler {
 
-    static private $fedoraExtentProp   = 'http://www.loc.gov/premis/rdf/v1#hasSize';
-    static private $fedoraBinaryClass  = 'http://fedora.info/definitions/v4/repository#Binary';
-    static private $fedoraMimeTypeProp = 'http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#hasMimeType';
-    static private $subclassProp       = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
-    static private $classProp          = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+    const FEDORA_CONTAINER            = 'http://fedora.info/definitions/v4/repository#Container';
+    const FEDORA_EXTENT_PROP          = 'http://www.loc.gov/premis/rdf/v1#hasSize';
+    const FEDORA_BINARY_CLASS         = 'http://fedora.info/definitions/v4/repository#Binary';
+    const FEDORA_MIME_TYPE_PROP       = 'http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#hasMimeType';
+    const OWL_DATATYPE_PROPERTY_CLASS = 'http://www.w3.org/2002/07/owl#DatatypeProperty';
+    const RDF_CLASS_PROP              = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+    const RDFS_SUBCLASS_PROP          = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+    const RDFS_RANGE_PROP             = 'http://www.w3.org/2000/01/rdf-schema#range';
+    const XSD_NMSP                    = 'http://www.w3.org/2001/XMLSchema#';
+    const XSD_STRING                  = 'http://www.w3.org/2001/XMLSchema#string';
+    const XSD_DATE                    = 'http://www.w3.org/2001/XMLSchema#date';
+    const XSD_DATETIME                = 'http://www.w3.org/2001/XMLSchema#dateTime';
+    const XSD_BOOLEAN                 = 'http://www.w3.org/2001/XMLSchema#boolean';
+    const XSD_INTEGER                 = 'http://www.w3.org/2001/XMLSchema#integer';
+    const XSD_DECIMAL                 = 'http://www.w3.org/2001/XMLSchema#decimal';
+    const XSD_FLOAT                   = 'http://www.w3.org/2001/XMLSchema#float';
+    const XSD_DOUBLE                  = 'http://www.w3.org/2001/XMLSchema#double';
+
     static private $repoResClasses;
+    static private $propertyRanges;
 
     /**
      * Checks resources at the end of transaction
@@ -94,6 +115,7 @@ class Handler {
         $d->log(" post transaction commit handler for " . $d->getTransactionId() . "...");
 
         self::updateCollectionExtent($parents, $d);
+        self::maintainAccessRights($modResources, $d);
 
         $d->log("  ...done");
     }
@@ -138,11 +160,13 @@ class Handler {
             $update = false;
             $update |= self::checkIdProp($res, array(), $d);
             $update |= self::checkTitleProp($res, $d);
-            $update |= self::generatePid($res, $d);
+            $update |= self::maintainPid($res, $d);
             $update |= self::maintainHosting($res, $d);
             $update |= self::maintainAvailableDate($res, $d);
             $update |= self::maintainExtent($res, $d);
             $update |= self::maintainFormat($res, $d);
+            $update |= self::maintainAccessRestriction($res, $d);
+            $update |= self::maintainPropertyRange($res, $d);
 
             if ($update) {
                 $d->log('  updating resource after checks');
@@ -161,12 +185,30 @@ class Handler {
     static private function loadOntology(Doorkeeper $d) {
         if (self::$repoResClasses === null) {
             $query                = "SELECT ?class where {?class (^?@ / ?@)+ ?@}";
-            $param                = array(RC::idProp(), self::$subclassProp, 'https://vocabs.acdh.oeaw.ac.at/schema#RepoObject');
+            $param                = [RC::idProp(), self::RDFS_SUBCLASS_PROP, RC::get('fedoraRepoObjectClass')];
             $query                = new SimpleQuery($query, $param);
             $results              = $d->getFedora()->runQuery($query);
-            self::$repoResClasses = array();
+            self::$repoResClasses = [RC::get('fedoraRepoObjectClass')];
             foreach ($results as $i) {
                 self::$repoResClasses[] = $i->class->getUri();
+            }
+        }
+        if (self::$propertyRanges === null) {
+            $query   = "
+                SELECT ?id ?type WHERE {
+                    ?prop ?@ ?type . 
+                    ?prop ?@ ?id .
+                    ?prop a ?@ .
+                }
+            ";
+            $param   = [self::RDFS_RANGE_PROP, RC::idProp(), self::OWL_DATATYPE_PROPERTY_CLASS];
+            $query   = new SimpleQuery($query, $param);
+            $results = $d->getFedora()->runQuery($query);
+            foreach ($results as $i) {
+                $uri = $i->type->getUri();
+                if (strpos($uri, self::XSD_NMSP) === 0) {
+                    self::$propertyRanges[$i->id->getUri()] = $uri;
+                }
             }
         }
     }
@@ -281,6 +323,7 @@ class Handler {
     static private function checkIdProp(FedoraResource $res, array $txRes,
                                         Doorkeeper $d): bool {
         $prop         = RC::idProp();
+        $pidProp      = RC::get('epicPidProp');
         $namespace    = RC::idNmsp();
         $ontologyPart = $d->isOntologyPart($res->getUri());
         $metadata     = $res->getMetadata();
@@ -290,7 +333,7 @@ class Handler {
             throw new LogicException("fedoraIdProp is a literal");
         }
 
-        $ids         = $metadata->allResources($prop);
+        $ids         = array_merge($metadata->allResources($prop), $metadata->allResources($pidProp));
         $acdhIdCount = 0;
         foreach ($ids as $id) {
             $id = $id->getUri();
@@ -360,7 +403,7 @@ class Handler {
         return $update;
     }
 
-    static private function generatePid(FedoraResource $res, Doorkeeper $d): bool {
+    static private function maintainPid(FedoraResource $res, Doorkeeper $d): bool {
         $pidProp = RC::get('epicPidProp');
 
         $metadata = $res->getMetadata();
@@ -382,6 +425,7 @@ class Handler {
             $res->setMetadata($metadata);
             return true;
         }
+
         return false;
     }
 
@@ -472,10 +516,54 @@ class Handler {
         }
     }
 
+    static private function maintainPropertyRange(FedoraResource $res,
+                                                  Doorkeeper $d): bool {
+        self::loadOntology($d);
+        
+        $changes = false;
+        $meta    = $res->getMetadata();
+        foreach ($meta->propertyUris() as $prop) {
+            $range = self::$propertyRanges[$prop] ?? null;
+            if ($range === null) {
+                continue;
+            }
+            foreach ($meta->allLiterals($prop) as $l) {
+                /* @var $l \EasyRdf\Literal */
+                $type = $l->getDatatypeUri() ?? self::XSD_STRING;
+                if ($type === $range) {
+                    continue;
+                }
+$d->log("# $prop\n\t$type\n\t$range");
+                if ($range === self::XSD_STRING) {
+                    $meta->delete($prop, $l);
+                    $meta->addLiteral($prop, (string) $l);
+                    $changes = true;
+                    $d->log('    casting ' . $prop . ' value from ' . $type . ' to string');
+                } elseif ($type === self::XSD_STRING) {
+                    try {
+                        $value   = self::castLiteral($l, $range);
+                        $meta->delete($prop, $l);
+                        $meta->addLiteral($prop, $value);
+                        $changes = true;
+                        $d->log('    casting ' . $prop . ' value from ' . $type . ' to ' . $range);
+                    } catch (RuntimeException $ex) {
+                        $d->log('    ' . $ex->getMessage());
+                    }
+                } else {
+                        $d->log('    unknown type: ' . $type);
+                }
+            }
+        }
+        if ($changes) {
+            $res->setMetadata($meta);
+        }
+        return $changes;
+    }
+
     static private function maintainExtent(FedoraResource $res, Doorkeeper $d): bool {
         $meta = $res->getMetadata();
-        $size = $meta->getLiteral(self::$fedoraExtentProp);
-        if ($size !== null && $res->isA(self::$fedoraBinaryClass)) {
+        $size = $meta->getLiteral(self::FEDORA_EXTENT_PROP);
+        if ($size !== null && $res->isA(self::FEDORA_BINARY_CLASS)) {
             $prop     = RC::get('fedoraExtentProp');
             $acdhSize = $meta->getLiteral($prop);
             if ($acdhSize === null || $acdhSize->getValue() !== $size->getValue()) {
@@ -491,8 +579,8 @@ class Handler {
 
     static private function maintainFormat(FedoraResource $res, Doorkeeper $d): bool {
         $meta   = $res->getMetadata();
-        $format = $meta->getLiteral(self::$fedoraMimeTypeProp);
-        if ($format !== null && $res->isA(self::$fedoraBinaryClass)) {
+        $format = $meta->getLiteral(self::FEDORA_MIME_TYPE_PROP);
+        if ($format !== null && $res->isA(self::FEDORA_BINARY_CLASS)) {
             $prop       = RC::get('fedoraFormatProp');
             $acdhFormat = $meta->getLiteral($prop);
             if ($acdhFormat === null || $acdhFormat->getValue() !== $format->getValue()) {
@@ -517,7 +605,8 @@ class Handler {
         $prop    = RC::get('fedoraHostingProp');
         $hosting = $meta->getResource($prop);
         if ($hosting === null) {
-            $meta->addResource($prop, RC::get('fedoraHostingPropDefault'));
+            $uuid = $res->getFedora()->getResourceById(RC::get('fedoraHostingPropDefault'))->getId();
+            $meta->addResource($prop, $uuid);
             $res->setMetadata($meta);
             $d->log('  ' . $prop . ' added');
             return true;
@@ -540,6 +629,32 @@ class Handler {
             $meta->addLiteral($prop, new DateTime());
             $res->setMetadata($meta);
             $d->log('  ' . $prop . ' added');
+            return true;
+        }
+        return false;
+    }
+
+    static private function maintainAccessRestriction(FedoraResource $res,
+                                                      Doorkeeper $d): bool {
+        self::loadOntology($d);
+        $meta = $res->getMetadata();
+
+        if (!self::resIsA($meta, self::$repoResClasses)) {
+            return false;
+        }
+
+        $prop      = RC::get('fedoraAccessRestrictionProp');
+        $resources = $meta->allResources($prop);
+        $literals  = $meta->allLiterals($prop);
+        $allowed   = ['public', 'academic', 'restricted'];
+        $condCount = count($literals) == 0 || count($resources) > 0 || count($literals) > 1;
+        $condValue = count($literals) > 0 && !in_array($literals[0]->getValue(), $allowed);
+        if ($condCount || $condValue) {
+            $default = RC::get('doorkeeperAccessRestrictionDefault');
+            $meta->delete($prop);
+            $meta->addLiteral($prop, $default);
+            $res->setMetadata($meta);
+            $d->log('  ' . $prop . ' = ' . $default . ' added');
             return true;
         }
         return false;
@@ -571,7 +686,7 @@ class Handler {
                 ?res ?@ ?colResSize .
             }
         ");
-        $param = array('', RC::idProp(), RC::relProp(), self::$fedoraExtentProp);
+        $param = array('', RC::idProp(), RC::relProp(), self::FEDORA_EXTENT_PROP);
         foreach ($collections as $n => $i) {
             $d->log("  Updating extent for $i ... (" . ($n + 1) . "/" . count($collections) . ")");
             $param[0] = $i;
@@ -602,12 +717,90 @@ class Handler {
      * @param array $classes
      */
     static private function resIsA(Resource $res, array $classes): bool {
-        foreach ($res->allResources(self::$classProp) as $type) {
+        foreach ($res->allResources(self::RDF_CLASS_PROP) as $type) {
             if (in_array($type->getUri(), $classes)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Access rights should be maintained according to the 
+     * cfg:fedoraAccessRestrictionProp:
+     * 
+     * - in all cases write access should be revoked from the public
+     * - when `public` read access to the public should be granted
+     * - when `academic` read access to the cfg:academicGroup should be granted
+     *   and public read access should be revoked
+     * - when `restricted` read rights should be revoked from both public and
+     *   cfg:academicGroup
+     * @param array $resources array of resources modified in the transaction
+     * @param Doorkeeper $d a doorkeeper instance
+     */
+    static public function maintainAccessRights(array $resources, Doorkeeper $d) {
+        self::loadOntology($d);
+
+        foreach ($resources as $n => $res) {
+            /* @var $res \acdhOeaw\fedora\FedoraResource */
+            $meta        = $res->getMetadata();
+            $accessRestr = (string) $meta->getLiteral(RC::get('fedoraAccessRestrictionProp'));
+            if ($accessRestr === '') {
+                continue;
+            }
+
+            $d->log('  maintaining access rights for ' . $res->getUri(true) . ' (' . ($n + 1) . '/' . count($resources) . ')');
+            $acl       = $res->getAcl();
+            $acl->createAcl();
+            $prevState = (string) $acl;
+            $acl->setAutosave(false);
+            $acl->revoke(WAR::USER, WAR::PUBLIC_USER, WAR::WRITE);
+
+            if ($accessRestr === 'public') {
+                $acl->grant(WAR::USER, WAR::PUBLIC_USER, WAR::READ);
+                $d->log('    public');
+            } else {
+                $acl->revoke(WAR::USER, WAR::PUBLIC_USER, WAR::READ);
+                if ($accessRestr === 'academic') {
+                    $acl->grant(WAR::USER, RC::get('academicGroup'), WAR::READ);
+                    $d->log('    academic');
+                } else {
+                    $acl->revoke(WAR::USER, RC::get('academicGroup'), WAR::READ);
+                    $d->log('    restricted');
+                }
+            }
+
+            if ((string) $acl !== $prevState) {
+                $acl->save();
+            } else {
+                $d->log('    no access rights changes');
+            }
+        }
+    }
+
+    static private function castLiteral(Literal $l, string $range): Literal {
+        switch ($range) {
+            case self::XSD_DATE:
+                $value = new lDate((string) $l, null, $range);
+                break;
+            case self::XSD_DATETIME:
+                $value = new lDateTime((string) $l, null, $range);
+                break;
+            case self::XSD_DECIMAL:
+            case self::XSD_FLOAT:
+            case self::XSD_DOUBLE:
+                $value = new lDecimal((string) $l, null, $range);
+                break;
+            case self::XSD_INTEGER:
+                $value = new lInteger((string) $l, null, $range);
+                break;
+            case self::XSD_BOOLEAN:
+                $value = new lBoolean((string) $l, null, $range);
+                break;
+            default:
+                throw new RuntimeException('Unknown range data type: ' . $range);
+        }
+        return $value;
     }
 
 }
