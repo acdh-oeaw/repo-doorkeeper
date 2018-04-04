@@ -70,12 +70,15 @@ try {
             if (substr($i->pswd, 0, 1) !== '$') {
                 $i->pswd = password_hash($i->pswd, PASSWORD_DEFAULT);
             }
+            if (!isset($i->admin)) {
+                $i->admin = false;
+            }
             $query = $pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
             $query->execute([$i->user]);
             $query = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $query->execute([$i->user]);
-            $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, 0)");
-            $query->execute([$i->user, $i->pswd]);
+            $query = $pdo->prepare("INSERT INTO users (user_id, password, admin) VALUES (?, ?, ?)");
+            $query->execute([$i->user, $i->pswd, (int) $i->admin]);
             $query = $pdo->prepare("INSERT INTO users_roles (user_id, role) VALUES (?, ?)");
             foreach ($i->roles as $j) {
                 $query->execute([$i->user, $j]);
