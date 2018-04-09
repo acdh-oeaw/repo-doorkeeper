@@ -61,6 +61,7 @@ $doorkeeper->registerPostEditHandler('\acdhOeaw\doorkeeper\handler\Handler::chec
 $doorkeeper->registerRoute(new RouteBlazegraph('/blazegraph', 'http://blazegraph:9999/blazegraph', array(), false));
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 $doorkeeper->registerRoute(new Route('/oai', 'http://oai', array(), false));
+$doorkeeper->registerRoute(new Route('/solr', 'http://solr:8983/solr', array(), true));
 $doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.eos.arz.oeaw.ac.at/services/cmdi2html', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $host = filter_input(INPUT_SERVER, 'HTTP_X_FORWARDED_HOST');
 $host = $host ? $host : filter_input(INPUT_SERVER, 'HTTP_HOST');
