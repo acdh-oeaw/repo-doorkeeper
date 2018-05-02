@@ -102,7 +102,7 @@ class Proxy {
      * @return Response
      * @throws RequestException
      */
-    public function proxy(string $url, ProxyOptions $opts = null): Response {
+    public function proxy(string $url, ProxyOptions $opts = null) {
         if ($opts === null) {
             $opts = new ProxyOptions();
         }
