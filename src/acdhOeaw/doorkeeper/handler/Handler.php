@@ -259,15 +259,19 @@ class Handler {
         $title = trim((string) $first . ' ' . (string) $last);
 
         $titles = $metadata->allLiterals($titleProp);
-        if (count($titles) > 1) {
-            throw new LogicException("more than one fedoraTitleProp");
-        } elseif (count($titles) == 1) {
-            $tmp = (string) $titles[0];
-            if (trim($tmp) === '') {
-                throw new LogicException("fedoraTitleProp value is empty");
-            } elseif ($title === '' || $title === $tmp) {
-                return false;
+        $langs = [];
+        foreach($titles as $i) {
+            $lang = $i->getLang();
+            if (isset($langs[$lang])) {
+                throw new LogicException("more than one fedoraTitleProp");
             }
+            if ((string) $i === '') {
+                throw new LogicException("fedoraTitleProp value is empty");
+            }
+            $langs[$lang] = '';
+        }
+        if (count($titles) > 0 && ($title === '' || (string) $titles[0] === $title)) {
+            return false;
         }
 
         if ($title === '') {
