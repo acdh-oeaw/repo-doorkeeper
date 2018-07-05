@@ -537,7 +537,6 @@ class Handler {
                 if ($type === $range) {
                     continue;
                 }
-$d->log("# $prop\n\t$type\n\t$range");
                 if ($range === self::XSD_STRING) {
                     $meta->delete($prop, $l);
                     $meta->addLiteral($prop, (string) $l);
@@ -785,10 +784,10 @@ $d->log("# $prop\n\t$type\n\t$range");
     static private function castLiteral(Literal $l, string $range): Literal {
         switch ($range) {
             case self::XSD_DATE:
-                $value = new lDate((string) $l, null, $range);
+                $value = new lDate(is_numeric((string) $l) ? $l . '-01-01' : (string) $l, null, $range);
                 break;
             case self::XSD_DATETIME:
-                $value = new lDateTime((string) $l, null, $range);
+                $value = new lDateTime(is_numeric((string) $l) ? $l . '-01-01' : (string) $l, null, $range);
                 break;
             case self::XSD_DECIMAL:
             case self::XSD_FLOAT:

@@ -13,9 +13,10 @@ RF::init($fedora);
 
 $fedora->begin();
 $res = RF::create([
-        'https://vocabs.acdh.oeaw.ac.at/schema#hasUpdatedDate' => '2017-04-03 03:02:01'
+        'https://vocabs.acdh.oeaw.ac.at/schema#hasUpdatedDate' => '2017'
     ]);
 $fedora->commit();
 echo $res->getUri(true) . "\n";
 echo $res->getMetadata()->getLiteral('https://vocabs.acdh.oeaw.ac.at/schema#hasUpdatedDate')->getDatatype() . "\n";
+echo (string) $res->getMetadata()->getLiteral('https://vocabs.acdh.oeaw.ac.at/schema#hasUpdatedDate') . "\n";
 
