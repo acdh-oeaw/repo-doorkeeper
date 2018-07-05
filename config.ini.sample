@@ -4,6 +4,8 @@ fedoraRelProp="http://purl.org/dc/terms/isPartOf"
 fedoraLocProp="https://vocabs.acdh.oeaw.ac.at/schema#locationpath"
 fedoraExtentProp="https://vocabs.acdh.oeaw.ac.at/schema#hasBinarySize"
 fedoraCountProp="https://vocabs.acdh.oeaw.ac.at/schema#hasNumberOfItems"
+fedoraAccessRestrictionProp="https://vocabs.acdh.oeaw.ac.at/schema#hasAccessRestriction"
+fedoraAccessRoleProp="https://vocabs.acdh.oeaw.ac.at/schema#hasAccessRole"
 
 epicUrl="https://pid.gwdg.de/handles/"
 epicPrefix="11022"

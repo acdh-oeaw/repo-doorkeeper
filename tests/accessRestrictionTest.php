@@ -15,6 +15,7 @@ RC::set('containerToUriPrefix', 'test://');
 RC::set('indexerDefaultBinaryClass', 'https://vocabs.acdh.oeaw.ac.at/schema#Resource');
 RC::set('indexerDefaultCollectionClass', 'https://vocabs.acdh.oeaw.ac.at/schema#Collection');
 $rightsProp = RC::get('fedoraAccessRestrictionProp');
+$roleProp = RC::get('fedoraAccessRoleProp');
 $fedora     = new Fedora();
 RF::init($fedora);
 
@@ -115,6 +116,26 @@ try {
     $acl = $res->getAcl(true);
     assert(AR::NONE === $acl->getMode(AR::USER, AR::PUBLIC_USER));
     assert(AR::NONE === $acl->getMode(AR::USER, RC::get('academicGroup')));
+} catch (Exception $e) {
+    $fedora->rollback();
+} finally {
+    $fedora->begin();
+    $res->delete(true, true, true);
+    $fedora->commit();
+}
+
+echo "hasAccessRole works for restricted resources\n";
+try {
+    $fedora->begin();
+    $res = RF::create([
+        'type' => RC::get('fedoraRepoObjectClass'), 
+        $rightsProp => 'restricted',
+        $roleProp => 'testUser'
+    ]);
+    $fedora->commit();
+
+    $acl = $res->getAcl(true);
+    assert(AR::READ === $acl->getMode(AR::USER, 'testUser'));
 } catch (Exception $e) {
     $fedora->rollback();
 } finally {

@@ -736,8 +736,9 @@ class Handler {
      * - when `public` read access to the public should be granted
      * - when `academic` read access to the cfg:academicGroup should be granted
      *   and public read access should be revoked
-     * - when `restricted` read rights should be revoked from both public and
-     *   cfg:academicGroup
+     * - when `restricted` read rights should be revoked public and 
+     *   cfg:academicGroupfrom everyone and granted but granted to users listed
+     *   in cfg:fedoraAccessRoleProp
      * @param array $resources array of resources modified in the transaction
      * @param Doorkeeper $d a doorkeeper instance
      */
@@ -769,6 +770,9 @@ class Handler {
                     $d->log('    academic');
                 } else {
                     $acl->revoke(WAR::USER, RC::get('academicGroup'), WAR::READ);
+                    foreach ($meta->all(RC::get('fedoraAccessRoleProp')) as $role) {
+                        $acl->grant(WAR::USER, (string) $role, WAR::READ);
+                    }
                     $d->log('    restricted');
                 }
             }
