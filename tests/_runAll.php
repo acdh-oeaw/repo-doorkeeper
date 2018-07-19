@@ -29,3 +29,5 @@ require_once '../vendor/autoload.php';
 include 'deleteTest.php';
 include 'idTest.php';
 include 'relTest.php';
+include 'maintainPropRanges.php';
+include 'accessRestrictionTest.php';

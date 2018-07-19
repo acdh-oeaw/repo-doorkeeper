@@ -27,6 +27,7 @@
 namespace acdhOeaw\doorkeeper\handler;
 
 use DateTime;
+use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
 use EasyRdf\Literal;
@@ -71,6 +72,10 @@ class Handler {
     const XSD_DATETIME                = 'http://www.w3.org/2001/XMLSchema#dateTime';
     const XSD_BOOLEAN                 = 'http://www.w3.org/2001/XMLSchema#boolean';
     const XSD_INTEGER                 = 'http://www.w3.org/2001/XMLSchema#integer';
+    const XSD_NEGATIVE_INTEGER        = 'http://www.w3.org/2001/XMLSchema#negativeInteger';
+    const XSD_NON_POSITIVE_INTEGER    = 'http://www.w3.org/2001/XMLSchema#nonPositiveInteger';
+    const XSD_NON_NEGATIVE_INTEGER    = 'http://www.w3.org/2001/XMLSchema#nonNegativeInteger';
+    const XSD_POSITIVE_INTEGER        = 'http://www.w3.org/2001/XMLSchema#positiveInteger';
     const XSD_DECIMAL                 = 'http://www.w3.org/2001/XMLSchema#decimal';
     const XSD_FLOAT                   = 'http://www.w3.org/2001/XMLSchema#float';
     const XSD_DOUBLE                  = 'http://www.w3.org/2001/XMLSchema#double';
@@ -259,8 +264,8 @@ class Handler {
         $title = trim((string) $first . ' ' . (string) $last);
 
         $titles = $metadata->allLiterals($titleProp);
-        $langs = [];
-        foreach($titles as $i) {
+        $langs  = [];
+        foreach ($titles as $i) {
             $lang = $i->getLang();
             if (isset($langs[$lang])) {
                 throw new LogicException("more than one fedoraTitleProp");
@@ -523,7 +528,7 @@ class Handler {
     static private function maintainPropertyRange(FedoraResource $res,
                                                   Doorkeeper $d): bool {
         self::loadOntology($d);
-        
+
         $changes = false;
         $meta    = $res->getMetadata();
         foreach ($meta->propertyUris() as $prop) {
@@ -553,7 +558,7 @@ class Handler {
                         $d->log('    ' . $ex->getMessage());
                     }
                 } else {
-                        $d->log('    unknown type: ' . $type);
+                    $d->log('    unknown type: ' . $type);
                 }
             }
         }
@@ -799,7 +804,13 @@ class Handler {
                 $value = new lDecimal((string) $l, null, $range);
                 break;
             case self::XSD_INTEGER:
-                $value = new lInteger((string) $l, null, $range);
+            case self::XSD_NEGATIVE_INTEGER:
+            case self::XSD_NON_NEGATIVE_INTEGER:
+            case self::XSD_NON_POSITIVE_INTEGER:
+            case self::XSD_POSITIVE_INTEGER:
+                // Fedora casts (non)positive/negative integers to string so it's better to keep them "standard" integers
+                //$value = new lInteger((int)((string) $l), null, $range);
+                $value = new lInteger((int)((string) $l), null, self::XSD_INTEGER);
                 break;
             case self::XSD_BOOLEAN:
                 $value = new lBoolean((string) $l, null, $range);
@@ -807,6 +818,15 @@ class Handler {
             default:
                 throw new RuntimeException('Unknown range data type: ' . $range);
         }
+
+        $c1 = $range == self::XSD_NEGATIVE_INTEGER && $value->getValue() >= 0;
+        $c2 = $range == self::XSD_POSITIVE_INTEGER && $value->getValue() <= 0;
+        $c3 = $range == self::XSD_NON_NEGATIVE_INTEGER && $value->getValue() < 0;
+        $c4 = $range == self::XSD_NON_POSITIVE_INTEGER && $value->getValue() > 0;
+        if ($c1 || $c2 || $c3 || $c4) {
+            throw new InvalidArgumentException('value does not match data type: ' . $value->getValue() . ' (' . $range . ')');
+        }
+
         return $value;
     }
 
