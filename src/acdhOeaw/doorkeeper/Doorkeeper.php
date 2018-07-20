@@ -496,7 +496,7 @@ class Doorkeeper {
         header('HTTP/1.1 400 Bad Request - doorkeeper checks failed');
         foreach ($errors as $i) {
             echo $i->getMessage() . "\n\n";
-            $this->log('    ' . ($i instanceof LogicException ? $i->getMessage() : $i));
+            $this->log('    [handler error] ' . ($i instanceof LogicException ? $i->getMessage() : $i));
         }
     }
 
