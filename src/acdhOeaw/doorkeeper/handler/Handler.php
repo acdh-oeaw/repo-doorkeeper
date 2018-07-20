@@ -816,7 +816,7 @@ class Handler {
                 $value = new lBoolean((string) $l, null, $range);
                 break;
             default:
-                throw new RuntimeException('Unknown range data type: ' . $range);
+                throw new RuntimeException('unknown range data type: ' . $range);
         }
 
         $c1 = $range == self::XSD_NEGATIVE_INTEGER && $value->getValue() >= 0;
