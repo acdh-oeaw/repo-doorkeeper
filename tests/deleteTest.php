@@ -8,15 +8,13 @@
  * a working repository stack deployment is required.
  */
 
-require_once '../vendor/autoload.php';
+require_once 'init.php';
 
 use acdhOeaw\fedora\Fedora;
-use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-RC::init(__DIR__ . '/../config.ini');
 $fedora = new Fedora();
 $idProp = RC::idProp();
 $meta   = (new Graph())->resource('.');

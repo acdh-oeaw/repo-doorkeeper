@@ -6,14 +6,13 @@
  * a working repository stack deployment is required.
  */
 
-require_once '../vendor/autoload.php';
+require_once 'init.php';
 
 use acdhOeaw\fedora\Fedora;
 use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-RC::init('config.ini');
 $fedora = new Fedora();
 $idProp = RC::idProp();
 $idNmsp = RC::idNmsp();
@@ -87,7 +86,7 @@ $meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $meta2 = $meta->copy();
 $meta2->addResource($idProp, 'https://some.random/id/b' . rand());
 $meta2->addResource($idProp, $res1->getId());
@@ -131,7 +130,7 @@ $meta1 = $meta->copy();
 $meta1->addResource($idProp, $id);
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $meta2 = $meta->copy();
 $meta2->addResource($idProp, $id);
 $fedora->begin();
@@ -169,7 +168,7 @@ $meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $id = $res1->getId();
 $fedora->begin();
 $res1 = $fedora->getResourceByUri($res1->getUri());
@@ -195,7 +194,7 @@ $meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://some.random/id/a' . rand());
 $res1 = $fedora->createResource($meta1);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $id = $res1->getId();
 $fedora->begin();
 $meta2 = $meta->copy();
@@ -203,7 +202,7 @@ $meta2->addResource($idProp, 'https://some.random/id/b' . rand());
 $meta2->addResource('http://my.own/property', $id);
 $res2 = $fedora->createResource($meta2);
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $fedora->begin();
 $meta3 = $meta->copy();
 $meta3->addResource($idProp, 'https://some.random/id/c' . rand());

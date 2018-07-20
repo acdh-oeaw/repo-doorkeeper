@@ -7,14 +7,13 @@
  * a working repository stack deployment is required.
  */
 
-require_once '../vendor/autoload.php';
+require_once 'init.php';
 
 use acdhOeaw\fedora\Fedora;
 use acdhOeaw\util\RepoConfig as RC;
 use GuzzleHttp\Exception\ClientException;
 use EasyRdf\Graph;
 
-RC::init('config.ini');
 $fedora  = new Fedora();
 $idProp  = RC::idProp();
 $relProp = RC::relProp();
@@ -103,7 +102,7 @@ $meta1->addResource($idProp, 'http://random.id/' . rand());
 $res1  = $fedora->createResource($meta1);
 $id1   = $res1->getId();
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $fedora->begin();
 $meta2 = $meta->copy();
 $meta2->addResource($idProp, 'http://random.id/' . rand());
@@ -136,7 +135,7 @@ $meta2->addResource($idProp, 'http://random.id/' . rand());
 $res2  = $fedora->createResource($meta2);
 $id2   = $res2->getId();
 $fedora->commit();
-sleep(2); // give triplestore time to synchronize
+
 $fedora->begin();
 $meta3 = $meta->copy();
 $meta3->addResource($idProp, 'http://random.id/' . rand());
