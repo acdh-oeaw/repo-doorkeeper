@@ -556,6 +556,8 @@ class Handler {
                         $d->log('    casting ' . $prop . ' value from ' . $type . ' to ' . $range);
                     } catch (RuntimeException $ex) {
                         $d->log('    ' . $ex->getMessage());
+                    } catch (InvalidArgumentException $ex) {
+                        throw new InvalidArgumentException('property ' . $prop . ': ' . $ex->getMessage(), $ex->getCode(), $ex);
                     }
                 } else {
                     $d->log('    unknown type: ' . $type);
