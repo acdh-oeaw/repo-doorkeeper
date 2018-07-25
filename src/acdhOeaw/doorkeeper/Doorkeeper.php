@@ -35,6 +35,7 @@ use EasyRdf\Graph;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Exception\RequestException;
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
@@ -541,9 +542,13 @@ class Doorkeeper {
         $param = array($res->getUri(true), $syncProp);
         $query = new SimpleQuery("SELECT ?val WHERE { ?@ ?@ ?val .}", $param);
         while (true) {
-            $results = $this->fedora->runQuery($query);
-            if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
-                break;
+            try{
+                $results = $this->fedora->runQuery($query);
+                if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
+                    break;
+                }
+            } catch (RequestException $e) {
+                $this->log('    [waitForTripleSync] error: ' . $e->getMessage());
             }
             sleep($interval);
         }
