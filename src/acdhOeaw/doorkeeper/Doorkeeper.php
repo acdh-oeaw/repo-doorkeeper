@@ -542,13 +542,9 @@ class Doorkeeper {
         $param = array($res->getUri(true), $syncProp);
         $query = new SimpleQuery("SELECT ?val WHERE { ?@ ?@ ?val .}", $param);
         while (true) {
-            try{
-                $results = $this->fedora->runQuery($query);
-                if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
-                    break;
-                }
-            } catch (RequestException $e) {
-                $this->log('    [waitForTripleSync] error: ' . $e->getMessage());
+            $results = $this->fedora->runQuery($query);
+            if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
+                break;
             }
             sleep($interval);
         }
