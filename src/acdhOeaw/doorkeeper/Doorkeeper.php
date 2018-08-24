@@ -541,12 +541,19 @@ class Doorkeeper {
 
         $param = array($res->getUri(true), $syncProp);
         $query = new SimpleQuery("SELECT ?val WHERE { ?@ ?@ ?val .}", $param);
+        $n = 0;
         while (true) {
             $results = $this->fedora->runQuery($query);
             if (count($results) > 0 && $results[0]->val->getValue() >= $value) {
                 break;
             }
             sleep($interval);
+
+            // keep transaction alive if waiting takes to much time
+            $n += $interval;
+            if ($interval >= 90) {
+                $this->fedora->prolong();
+            }
         }
         return time() - $t;
     }
