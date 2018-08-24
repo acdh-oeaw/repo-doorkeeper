@@ -553,6 +553,7 @@ class Doorkeeper {
             $n += $interval;
             if ($interval >= 90) {
                 $this->fedora->prolong();
+                $n = 0;
             }
         }
         return time() - $t;
