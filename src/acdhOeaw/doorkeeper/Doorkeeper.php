@@ -507,7 +507,7 @@ class Doorkeeper {
      * @param string $msg message to write
      */
     public function log($msg) {
-        fwrite($this->logFile, $msg . "\n");
+        fwrite($this->logFile, date('Y-m-d_H:i:s') . "\t" . $msg . "\n");
     }
 
     /**
