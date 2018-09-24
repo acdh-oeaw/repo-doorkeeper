@@ -39,7 +39,6 @@ use GuzzleHttp\Exception\RequestException;
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
-use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\exceptions\NotFound;

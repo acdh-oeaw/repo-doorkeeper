@@ -37,6 +37,8 @@ use EasyRdf\Literal\DateTime as lDateTime;
 use EasyRdf\Literal\Decimal as lDecimal;
 use EasyRdf\Literal\Integer as lInteger;
 use EasyRdf\Resource;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Exception\RequestException;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\fedora\FedoraResource;
@@ -121,6 +123,7 @@ class Handler {
 
         self::updateCollectionExtent($parents, $d);
         self::maintainAccessRights($modResources, $d);
+        self::maintainSolr($modResources, $delUris, $d);
 
         $d->log("  ...done");
     }
@@ -812,7 +815,7 @@ class Handler {
             case self::XSD_POSITIVE_INTEGER:
                 // Fedora casts (non)positive/negative integers to string so it's better to keep them "standard" integers
                 //$value = new lInteger((int)((string) $l), null, $range);
-                $value = new lInteger((int)((string) $l), null, self::XSD_INTEGER);
+                $value = new lInteger((int) ((string) $l), null, self::XSD_INTEGER);
                 break;
             case self::XSD_BOOLEAN:
                 $value = new lBoolean((string) $l, null, $range);
@@ -830,6 +833,82 @@ class Handler {
         }
 
         return $value;
+    }
+
+    static private function maintainSolr(array $modResources, array $delUris,
+                                         Doorkeeper $d) {
+        self::loadOntology($d);
+        $client = new Client([
+            'verify' => false,
+            'auth'   => ['admin', RC::get('fedoraPswd')],
+        ]);
+
+        $d->log('  Maintaining solr');
+
+        // Adding
+        $indexedCount = 0;
+        foreach ($modResources as $res) {
+            /* @var $res \acdhOeaw\fedora\FedoraResource */
+            $meta      = $res->getMetadata();
+            $isBinary  = $res->isA(self::FEDORA_BINARY_CLASS);
+            $isRepoObj = self::resIsA($meta, self::$repoResClasses);
+            $isPublic  = ((string) $meta->getLiteral(RC::get('fedoraAccessRestrictionProp'))) === 'public';
+            $validMime = in_array((string) $meta->getLiteral(self::FEDORA_MIME_TYPE_PROP), RC::get('solrIndexedMime'));
+            $validSize = (int) $meta->getLiteral(self::FEDORA_EXTENT_PROP) <= (int) RC::get('solrIndexedMaxSize');
+            if ($isBinary && $isRepoObj && $isPublic && $validMime && $validSize) {
+                try {
+                    $d->log('    indexing ' . $res->getUri(true));
+
+                    $dataReq  = new Request('GET', $res->getUri(true));
+                    $dataResp = $client->send($dataReq);
+
+                    $url     = RC::get('solrUrl') . '/arche/update/extract?literal.id=' . urlencode($res->getUri(true));
+                    $headers = [
+                        'Content-Type'   => $dataResp->getHeader('Content-Type'),
+                        'Content-Length' => $dataResp->getHeader('Content-Length'),
+                    ];
+                    $body    = $dataResp->getBody();
+                    $req     = new Request('POST', $url, $headers, $body);
+                    $client->send($req);
+
+                    $indexedCount++;
+                } catch (RequestException $e) {
+                    $d->log('      failed');
+                    $d->log('      ' . $e->getMessage());
+                }
+            } else {
+                $d->log("    skipping (binary: $isBinary repoObjClass: $isRepoObj public: $isPublic mime: $validMime size: $validSize) " . $res->getUri(true));
+            }
+        }
+        if ($indexedCount > 0) {
+            try {
+                $d->log('    ' . $indexedCount . ' added - commiting');
+                $req = new Request('GET', RC::get('solrUrl') . '/arche/update/extract?commit=true');
+                $client->send($req);
+            } catch (RequestException $e) {
+                $d->log('      XXXX');
+                $d->log('      ' . $e->getMessage());
+            }
+        }
+
+        // Removing
+        if (count($delUris) > 0) {
+            try {
+                $url     = RC::get('solrUrl') . '/arche/update/?commit=true';
+                $headers = ['Content-Type' => 'text/xml'];
+                $body    = '<update><commit waitSearcher="false" expungeDeletes="true"/><optimize waitSearcher="false"/>';
+                foreach ($delUris as $uri) {
+                    $body .= '<delete><id>' . htmlspecialchars($uri) . '</id></delete>';
+                }
+                $body .= '</update>';
+                $req  = new Request('GET', $url, $headers, $body);
+                $d->log('    removing: ' . $body);
+                $client->send($req);
+            } catch (RequestException $e) {
+                $d->log('      failed');
+                $d->log('      ' . $e->getMessage());
+            }
+        }
     }
 
 }
