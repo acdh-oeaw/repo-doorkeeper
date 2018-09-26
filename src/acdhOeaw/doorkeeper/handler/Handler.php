@@ -854,7 +854,7 @@ class Handler {
             $isRepoObj = self::resIsA($meta, self::$repoResClasses);
             $isPublic  = ((string) $meta->getLiteral(RC::get('fedoraAccessRestrictionProp'))) === 'public';
             $validMime = in_array((string) $meta->getLiteral(self::FEDORA_MIME_TYPE_PROP), RC::get('solrIndexedMime'));
-            $validSize = (int) $meta->getLiteral(self::FEDORA_EXTENT_PROP) <= (int) RC::get('solrIndexedMaxSize');
+            $validSize = (int) ((string) $meta->getLiteral(self::FEDORA_EXTENT_PROP)) <= (int) RC::get('solrIndexedMaxSize');
             if ($isBinary && $isRepoObj && $isPublic && $validMime && $validSize) {
                 try {
                     $d->log('    indexing ' . $res->getUri(true));
