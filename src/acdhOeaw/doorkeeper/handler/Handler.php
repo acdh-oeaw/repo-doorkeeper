@@ -84,6 +84,8 @@ class Handler {
 
     static private $repoResClasses;
     static private $propertyRanges;
+    static private $solrMetaPropTmpl;
+    static private $solrMetaPropMap;
 
     /**
      * Checks resources at the end of transaction
@@ -856,26 +858,7 @@ class Handler {
             $validMime = in_array((string) $meta->getLiteral(self::FEDORA_MIME_TYPE_PROP), RC::get('solrIndexedMime'));
             $validSize = (int) ((string) $meta->getLiteral(self::FEDORA_EXTENT_PROP)) <= (int) RC::get('solrIndexedMaxSize');
             if ($isBinary && $isRepoObj && $isPublic && $validMime && $validSize) {
-                try {
-                    $d->log('    indexing ' . $res->getUri(true));
-
-                    $dataReq  = new Request('GET', $res->getUri(true));
-                    $dataResp = $client->send($dataReq);
-
-                    $url     = RC::get('solrUrl') . '/arche/update/extract?literal.id=' . urlencode($res->getUri(true));
-                    $headers = [
-                        'Content-Type'   => $dataResp->getHeader('Content-Type'),
-                        'Content-Length' => $dataResp->getHeader('Content-Length'),
-                    ];
-                    $body    = $dataResp->getBody();
-                    $req     = new Request('POST', $url, $headers, $body);
-                    $client->send($req);
-
-                    $indexedCount++;
-                } catch (RequestException $e) {
-                    $d->log('      failed');
-                    $d->log('      ' . $e->getMessage());
-                }
+                $indexedCount += self::solrIndexResource($res, $meta, $client, $d);
             } else {
                 $d->log("    skipping (binary: $isBinary repoObjClass: $isRepoObj public: $isPublic mime: $validMime size: $validSize) " . $res->getUri(true));
             }
@@ -886,7 +869,6 @@ class Handler {
                 $req = new Request('GET', RC::get('solrUrl') . '/arche/update/extract?commit=true');
                 $client->send($req);
             } catch (RequestException $e) {
-                $d->log('      XXXX');
                 $d->log('      ' . $e->getMessage());
             }
         }
@@ -909,6 +891,68 @@ class Handler {
                 $d->log('      ' . $e->getMessage());
             }
         }
+    }
+
+    static private function solrIndexResource(FedoraResource $res,
+                                              Resource $meta, Client $client,
+                                              Doorkeeper $d): int {
+        $indexed = 0;
+        try {
+            $d->log('    indexing ' . $res->getUri(true));
+
+            // binary payload indexing
+            $dataReq  = new Request('GET', $res->getUri(true));
+            $dataResp = $client->send($dataReq);
+
+            $url     = RC::get('solrUrl') . '/arche/update/extract?literal.id=' . urlencode($res->getUri(true));
+            $headers = [
+                'Content-Type'   => $dataResp->getHeader('Content-Type'),
+                'Content-Length' => $dataResp->getHeader('Content-Length'),
+            ];
+            $body    = $dataResp->getBody();
+            $req     = new Request('POST', $url, $headers, $body);
+            $client->send($req);
+
+            // metadata indexing
+            if (self::solrMetaPropInit()) {
+                $body = self::$solrMetaPropTmpl;
+                $body['id'] = $res->getUri(true);
+                foreach (self::$solrMetaPropMap as $solrName => $propUri) {
+                    foreach ($meta->all($propUri) as $prop) {
+                        $body[$solrName]['set'][] = (string) $prop;
+                    }
+                }
+                $url     = RC::get('solrUrl') . '/arche/update';
+                $headers = ['Content-Type' => 'application/json'];
+                $req     = new Request('POST', $url, $headers, json_encode([$body]));
+                $client->send($req);
+            }
+            
+            $indexed = 1;
+        } catch (RequestException $e) {
+            $d->log('      failed');
+            if (!$e->hasResponse()) {
+                $d->log('      ' . $e->getMessage());
+            } else {
+                $d->log((string) $e->getResponse()->getBody());
+            }
+        }
+        return $indexed;
+    }
+
+    static private function solrMetaPropInit() {
+        if (self::$solrMetaPropTmpl === null) {
+            try {
+                self::$solrMetaPropMap  = RC::get('solrPropMap');
+                self::$solrMetaPropTmpl = ['id' => ''];
+                foreach (self::$solrMetaPropMap as $solrName => $propUri) {
+                    $solrMetaPropTmpl[$solrName] = ['set' => []];
+                }
+            } catch (InvalidArgumentException $ex) {
+                return false;
+            }
+        }
+        return true;
     }
 
 }

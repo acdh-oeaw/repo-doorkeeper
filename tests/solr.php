@@ -34,6 +34,7 @@ $fedora = new Fedora();
 $idProp = RC::idProp();
 $meta   = (new Graph())->resource('.');
 $meta->addLiteral(RC::titleProp(), 'test resource');
+$meta->addLiteral(RC::titleProp(), 'Testowy tytuł', 'pl');
 $meta->addResource($idProp, 'http://random.id/' . rand());
 $meta->addResource($idProp, 'http://random.id/myId');
 $meta->addResource('http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'https://vocabs.acdh.oeaw.ac.at/schema#RepoObject');
