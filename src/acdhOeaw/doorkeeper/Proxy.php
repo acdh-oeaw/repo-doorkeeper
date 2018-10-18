@@ -44,8 +44,8 @@ class Proxy {
      * (https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers#hbh plus host header)
      * @var array
      */
-    static $skipResponseHeaders = array('connection', 'keep-alive', 'proxy-authenticate',
-        'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host');
+    static $skipResponseHeaders = ['connection', 'keep-alive', 'proxy-authenticate',
+        'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host'];
 
     /**
      * Gets an original (before being proxied) HTTP header value.
@@ -76,7 +76,7 @@ class Proxy {
      * @var arrray
      * @see getForwardHeaders()
      */
-    private $skipForwardHeaders = array(
+    private $skipForwardHeaders = [
         'authorization',
         'x-forwarded-for',
         'x-forwarded-proto',
@@ -84,7 +84,7 @@ class Proxy {
         'x-forwarded-port',
         'x-forwarded-server',
         'host'
-    );
+    ];
 
     /**
      * 
@@ -121,7 +121,7 @@ class Proxy {
             $input = fopen('php://input', 'r');
         }
 
-        $options               = array();
+        $options               = [];
         $output                = fopen('php://output', 'w');
         $options['sink']       = $output;
         $options['on_headers'] = function(Response $r) {
@@ -136,33 +136,31 @@ class Proxy {
         try {
             $response = $client->send($request);
         } catch (RequestException $e) {
-            if (!$e->hasResponse()) {
-                throw $e; // if there is no response we can't properly return from function
+            if ($e->hasResponse()) {
+                $response = $e->getResponse();
             }
-            $response = $e->getResponse();
+        }
+        if ($input) {
+            fclose($input);
+        }
+        fclose($output);
 
-            if ($input) {
-                fclose($input);
-                $input = null;
-            }
-            $request = $e->getRequest();
-            $uri     = $request->getUri();
-            $this->doorkeeper->log('    ' . json_encode(array(
+        if (!isset($response) || $response->getStatusCode() >= 400) {
+            $uri = $request->getUri();
+            $this->doorkeeper->log('    ' . json_encode([
                     'PROXY ERROR',
-                    $response->getStatusCode(),
-                    $response->getReasonPhrase(),
+                    $response ? $response->getStatusCode() : 'no response',
+                    $response ? $response->getReasonPhrase() : 'no response',
                     $request->getMethod(),
                     $uri->getScheme() . '://' . $uri->getHost() . $uri->getPath(),
                     $request->getHeaders(),
                     $request->getBody()
-            )));
-        } finally {
-            if ($input) {
-                fclose($input);
-            }
-            fclose($output);
+            ]));
         }
 
+        if (!isset($response)) {
+            throw $e; // if there is no response we can't properly return from function
+        }
         return $response;
     }
 
@@ -171,9 +169,8 @@ class Proxy {
      * @param Response $response
      */
     public function handleResponseHeaders(Response $response) {
-
         $status = $response->getStatusCode();
-        if (in_array($status, array(401, 403))) {
+        if (in_array($status, [401, 403])) {
             // if credentials were not provided in the original request inform user, they are required
             $authData = Auth::authenticate();
             if ($authData->user == Auth::DEFAULT_USER) {
@@ -182,6 +179,7 @@ class Proxy {
                 return;
             }
         }
+
         header('HTTP/1.1 ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase());
         foreach ($response->getHeaders() as $name => $values) {
             if (in_array(strtolower($name), self::$skipResponseHeaders)) {
@@ -199,7 +197,7 @@ class Proxy {
      * @return array
      */
     private function getForwardHeaders(ProxyOptions $opts): array {
-        $headers = array();
+        $headers = [];
         foreach ($_SERVER as $k => $v) {
             if (substr($k, 0, 5) !== 'HTTP_') {
                 continue;
@@ -240,7 +238,7 @@ class Proxy {
             $headers['host'] = trim($tmp[0]);
         }
         if ($opts->cookies) {
-            $cookies = array();
+            $cookies = [];
             foreach ($_COOKIE as $k => $v) {
                 $cookies[] = $k . '=' . $v;
             }
