@@ -128,7 +128,7 @@ class Auth {
      */
     static public function authUser(string $user, string $password): bool {
         $query = self::$pdo->prepare("SELECT password FROM users WHERE user_id = ?");
-        $query->execute(array($user));
+        $query->execute([$user]);
         $hash  = $query->fetchColumn();
         if ($hash !== false) {
             return password_verify($password, $hash);
@@ -143,7 +143,7 @@ class Auth {
      */
     static public function getAdmin(string $user): bool {
         $query = self::$pdo->prepare("SELECT admin FROM users WHERE user_id = ?");
-        $query->execute(array($user));
+        $query->execute([$user]);
         return $query->fetchColumn();
     }
 
@@ -154,10 +154,10 @@ class Auth {
      */
     static public function getRoles(string $user): array {
         $query = self::$pdo->prepare("SELECT role FROM users_roles WHERE user_id = ?");
-        $query->execute(array($user));
+        $query->execute([$user]);
         $roles = $query->fetchAll(PDO::FETCH_COLUMN);
         if (!is_array($roles)) {
-            $roles = array();
+            $roles = [];
         }
         return $roles;
     }
@@ -170,7 +170,7 @@ class Auth {
      * @throws BadMethodCallException
      */
     static public function addUser(string $user, string $password,
-                                   array $roles = array()) {
+                                   array $roles = []) {
         if (strlen($password) < 4) {
             throw new BadMethodCallException('password must contain at least 4 characters');
         }
@@ -178,17 +178,17 @@ class Auth {
         self::$pdo->beginTransaction();
         
         $query = self::$pdo->prepare("DELETE FROM users_roles WHERE user_id = ?");
-        $query->execute(array($user));
+        $query->execute([$user]);
         
         $query = self::$pdo->prepare("DELETE FROM users WHERE user_id = ?");
-        $query->execute(array($user));
+        $query->execute([$user]);
 
         $query = self::$pdo->prepare("INSERT INTO users (user_id, password) VALUES (?, ?)");
-        $query->execute(array($user, password_hash($password, \PASSWORD_DEFAULT)));
+        $query->execute([$user, password_hash($password, \PASSWORD_DEFAULT)]);
         
         $query = self::$pdo->prepare("INSERT INTO users_roles (user_id, role) VALUES (?, ?)");
         foreach (array_unique($roles) as $i) {
-            $query->execute(array($user, $i));
+            $query->execute([$user, $i]);
         }
         
         self::$pdo->commit();
@@ -201,7 +201,7 @@ class Auth {
      * @param array $roles
      */
     static public function modifyUser(string $user, string $password,
-                                      array $roles = array()) {
+                                      array $roles = []) {
         self::addUser($user, $password, $roles);
     }
 
@@ -221,5 +221,5 @@ class Auth {
      * All roles user belongs to
      * @var array
      */
-    public $roles = array();
+    public $roles = [];
 }

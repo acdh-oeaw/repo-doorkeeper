@@ -72,7 +72,7 @@ class ProxyOptions {
      * 
      * @param array $options
      */
-    public function __construct(array $options = array()) {
+    public function __construct(array $options = []) {
         foreach ($options as $k => $v) {
             $this->$k = $v;
         }

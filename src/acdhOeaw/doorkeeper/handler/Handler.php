@@ -101,7 +101,7 @@ class Handler {
                                             Doorkeeper $d) {
         $d->log(" pre transaction commit handler for: " . $d->getTransactionId());
 
-        $modUris = array();
+        $modUris = [];
         foreach ($modResources as $n => $i) {
             $d->log('  ' . $i->getUri() . " (" . ($n + 1) . "/" . count($modResources) . ")");
             $modUris[] = $i->getUri(true);
@@ -168,7 +168,7 @@ class Handler {
             $res->getMetadata();
 
             $update = false;
-            $update |= self::checkIdProp($res, array(), $d);
+            $update |= self::checkIdProp($res, [], $d);
             $update |= self::checkTitleProp($res, $d);
             $update |= self::maintainPid($res, $d);
             $update |= self::maintainHosting($res, $d);
@@ -252,13 +252,13 @@ class Handler {
      * @throws LogicException
      */
     static private function checkTitleProp(FedoraResource $res, Doorkeeper $d) {
-        $searchProps = array(
+        $searchProps = [
             'http://purl.org/dc/elements/1.1/title',
             'http://purl.org/dc/terms/title',
             'http://www.w3.org/2004/02/skos/core#prefLabel',
             'http://www.w3.org/2000/01/rdf-schema#label',
             'http://xmlns.com/foaf/0.1/name',
-        );
+        ];
         $titleProp   = RC::titleProp();
 
         $metadata = $res->getMetadata();
@@ -364,7 +364,7 @@ class Handler {
                 // ACDH id is immutable (can not be changed)
                 // (we can compare it only to the state before transaction as changes within transaction are not saved anywhere)
                 $uri    = $res->getUri(true);
-                $query  = (new Query())->setDistinct(true)->setSelect(array('?id'));
+                $query  = (new Query())->setDistinct(true)->setSelect(['?id']);
                 $query->addParameter(new HasTriple($uri, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', '?a'));
                 $query->addParameter((new HasTriple($uri, RC::idProp(), '?id'))->setOptional(true));
                 $result = $d->getFedora()->runQuery($query);
@@ -374,7 +374,7 @@ class Handler {
             }
 
             // every id must be unique
-            $matches = array();
+            $matches = [];
             try {
                 $matches[] = $d->getFedora()->getResourceById($id)->getUri(true);
             } catch (NotFound $e) {
@@ -398,7 +398,7 @@ class Handler {
         if ($acdhIdCount == 0 && !$ontologyPart) {
             do {
                 $id = $namespace . UUID::v4();
-            } while (self::checkIfIdExists($id, $txRes, array(), $d));
+            } while (self::checkIfIdExists($id, $txRes, [], $d));
             $d->log("  no ACDH id - assigned " . $id);
 
             $metadata->addResource($prop, $id);
@@ -521,7 +521,7 @@ class Handler {
     static private function checkOrphanedRelProp($delUri, array $delUris,
                                                  array $modUris, Doorkeeper $d) {
         $query   = new SimpleQuery('SELECT DISTINCT ?res WHERE {?res ?prop ?@}');
-        $query->setValues(array($d->getDeletedResourceId($delUri)));
+        $query->setValues([$d->getDeletedResourceId($delUri)]);
         $orphans = $d->getFedora()->runQuery($query);
         foreach ($orphans as $i) {
             if (!in_array($i->res, $delUris) && !in_array($i->res, $modUris)) {
@@ -680,9 +680,9 @@ class Handler {
         $extProp   = RC::get('fedoraExtentProp');
         $countProp = RC::get('fedoraCountProp');
 
-        $collections = array();
+        $collections = [];
         $query       = new SimpleQuery('SELECT * WHERE {?@ ^?@ / (?@ / ^?@)* ?col}');
-        $queryParam  = array('', RC::idProp(), RC::relProp(), RC::idProp());
+        $queryParam  = ['', RC::idProp(), RC::relProp(), RC::idProp()];
         foreach ($parents as $n => $i) {
             $d->log("  Collecting parent resources list (" . ($n + 1) . "/" . count($parents) . ")");
             $queryParam[0] = $i;
@@ -701,7 +701,7 @@ class Handler {
                 ?res ?@ ?colResSize .
             }
         ");
-        $param = array('', RC::idProp(), RC::relProp(), self::FEDORA_EXTENT_PROP);
+        $param = ['', RC::idProp(), RC::relProp(), self::FEDORA_EXTENT_PROP];
         foreach ($collections as $n => $i) {
             $d->log("  Updating extent for $i ... (" . ($n + 1) . "/" . count($collections) . ")");
             $param[0] = $i;

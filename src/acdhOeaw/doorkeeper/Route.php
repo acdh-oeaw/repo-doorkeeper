@@ -52,7 +52,7 @@ class Route {
      * @param \acdhOeaw\doorkeeper\ProxyOptions $opts
      */
     public function __construct(string $route, string $proxyUrl,
-                                array $roles = array(), bool $admin = false,
+                                array $roles = [], bool $admin = false,
                                 ProxyOptions $opts = null) {
         $this->route    = $route;
         $this->proxyUrl = $proxyUrl;
