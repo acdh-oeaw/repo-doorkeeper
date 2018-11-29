@@ -6,7 +6,11 @@ sudo: required
 
 services:
   - docker
-  
+
+addons:
+  - hosts:
+    - fedora
+
 install:
   - cp config.ini.sample config.ini
   - sed 's|sparqlUrl=".*"|sparqlUrl="http://fedora/blazegraph/sparql"|' config.ini.sample > tests/config.ini
