@@ -1,0 +1,18 @@
+language: php
+php:
+  - 7.2
+
+sudo: required
+
+services:
+  - docker
+  
+install:
+  - docker build -t acdh/fcrepo tests/docker
+  - docker run -d -p 8080:8080 acdh/fcrepo
+  - sleep 5
+  - cp config.ini.sample tests/config.ini
+  - composer update
+
+script:
+  - php -f tests/_runAll.php
