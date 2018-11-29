@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 
-require_once '../vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 include 'deleteTest.php';
 include 'idTest.php';
