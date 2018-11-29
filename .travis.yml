@@ -7,10 +7,6 @@ sudo: required
 services:
   - docker
 
-addons:
-  - hosts:
-    - fedora
-
 install:
   - cp config.ini.sample config.ini
   - sed 's|sparqlUrl=".*"|sparqlUrl="http://fedora/blazegraph/sparql"|' config.ini.sample > tests/config.ini
@@ -30,6 +26,7 @@ install:
   - docker run -d --name=blazegraph --network=repo acdh/blazegraph
   - docker run -d --name=www --network=repo -p 80:80 -v `pwd`:/var/www/html acdh/www
   - docker run -d --name=karaf --network=repo acdh/karaf
+  - sudo echo '127.0.0.1 fedora' >> /etc/hosts
   # give containers time to start
   - sleep 5
   # download & import ontology - required by some tests
