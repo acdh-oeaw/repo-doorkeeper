@@ -28,12 +28,33 @@
 $composer = require_once __DIR__ . '/../vendor/autoload.php';
 $composer->addPsr4('acdhOeaw\\', __DIR__ . '/../src/acdhOeaw');
 
+use acdhOeaw\fedora\Fedora;
 use acdhOeaw\util\RepoConfig as RC;
+use acdhOeaw\util\ResourceFactory as RF;
+use acdhOeaw\fedora\exceptions\NotFound;
 use zozlak\util\ClassLoader;
-
-RC::init(__DIR__ . '/../config.ini');
 
 ini_set('assert.exception', 1);
 if (ini_get('zend.assertions') !== '1') {
     throw new Exception('Enable assertions by setting zend.assertions = 1 in your php.ini');
 }
+
+RC::init(__DIR__ . '/config.ini');
+$fedora = new Fedora();
+RF::init($fedora);
+
+$fedora->begin();
+$uri = RC::get('fedoraAclUri');
+try {
+    $aclRes = $fedora->getResourceByUri($uri);
+} catch (NotFound $e) {
+    RF::create([], $uri, 'PUT');
+}
+$id = RC::get('fedoraHostingPropDefault');
+try {
+    $aclRes = $fedora->getResourceById($id);
+} catch (NotFound $e) {
+    RF::create(['id' => $id]);
+}
+$fedora->commit();
+

@@ -1,7 +1,7 @@
 /nbproject
 /vendor
 /composer.lock
-/config.ini
+config.ini
 /*.sparql
 *.sqlite
 /*log

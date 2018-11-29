@@ -38,9 +38,9 @@ use EasyRdf\RdfNamespace;
 $cl = new ClassLoader();
 RdfNamespace::set('dct', 'http://purl.org/dc/terms/');
 
-RC::init('config.ini');
+RC::init(__DIR__ . '/config.ini');
 
-$dbFile = 'db.sqlite';
+$dbFile = __DIR__ . '/db.sqlite';
 $initDb = !file_exists($dbFile);
 $pdo = new PDO('sqlite:' . $dbFile);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

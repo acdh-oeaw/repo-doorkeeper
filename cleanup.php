@@ -24,14 +24,14 @@
  * THE SOFTWARE.
  */
 
-require_once __DIR__ . '/vendor/autoload.php';
+$composer = require_once __DIR__ . '/vendor/autoload.php';
 
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Doorkeeper;
 use acdhOeaw\doorkeeper\Auth;
 use zozlak\util\ClassLoader;
 
-$cl = new ClassLoader(__DIR__ . '/src');
+$composer->addPsr4('acdhOeaw\\', __DIR__ . '/src/acdhOeaw');
 RC::init(__DIR__ . '/config.ini');
 
 $dbFile = __DIR__ . '/db.sqlite';

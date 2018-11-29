@@ -24,10 +24,9 @@
  * THE SOFTWARE.
  */
 
-require_once __DIR__ . '/init.php';
+foreach (new DirectoryIterator(__DIR__) as $file) {
+    if (substr($file->getFilename(), -8) === 'Test.php') {
+        require $file;
+    }
+}
 
-include 'deleteTest.php';
-include 'idTest.php';
-include 'relTest.php';
-include 'maintainPropRanges.php';
-include 'accessRestrictionTest.php';

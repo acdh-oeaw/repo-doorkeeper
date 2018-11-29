@@ -124,8 +124,10 @@ class Handler {
         $d->log(" post transaction commit handler for " . $d->getTransactionId() . "...");
 
         self::updateCollectionExtent($parents, $d);
-        self::maintainAccessRights($modResources, $d);
-        self::maintainSolr($modResources, $delUris, $d);
+	self::maintainAccessRights($modResources, $d);
+	if (!empty(RC::get('solrUrl', true) )) {
+            self::maintainSolr($modResources, $delUris, $d);
+	}
 
         $d->log("  ...done");
     }
