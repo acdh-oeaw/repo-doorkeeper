@@ -32,6 +32,8 @@ install:
   - docker run -d --name=karaf --network=repo acdh/karaf
   # give containers time to start
   - sleep 5
+  # initialize repo
+  - php -f tests/init.php
   # download & import ontology - required by some tests
   - git clone https://github.com/acdh-oeaw/repo-schema && ln -s ../vendor repo-schema/vendor && ln -s ../tests/config.ini repo-schema/config.ini
   - php -f repo-schema/importOntology.php repo-schema/acdh-schema.owl skipBinary
