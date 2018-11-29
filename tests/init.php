@@ -25,15 +25,13 @@
  */
 
 
-require_once __DIR__ . '/../vendor/autoload.php';
+$composer = require_once __DIR__ . '/../vendor/autoload.php';
+$composer->addPsr4('acdhOeaw\\', __DIR__ . '/../src/acdhOeaw');
 
 use acdhOeaw\util\RepoConfig as RC;
 use zozlak\util\ClassLoader;
 
-$loader = new ClassLoader(__DIR__ . '/../src');
-
 RC::init(__DIR__ . '/../config.ini');
-RC::set('sparqlUrl', 'https://fedora.localhost/blazegraph/sparql');
 
 ini_set('assert.exception', 1);
 if (ini_get('zend.assertions') !== '1') {
