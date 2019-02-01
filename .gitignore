@@ -6,3 +6,5 @@ config.ini
 *.sqlite
 /*log
 /users.json
+/tests/ontology.json
+/ontology.json

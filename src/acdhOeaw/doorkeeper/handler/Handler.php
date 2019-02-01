@@ -51,6 +51,7 @@ use acdhOeaw\fedora\metadataQuery\HasTriple;
 use acdhOeaw\fedora\metadataQuery\SimpleQuery;
 use acdhOeaw\epicHandle\HandleService;
 use acdhOeaw\util\RepoConfig as RC;
+use acdhOeaw\util\Ontology;
 use zozlak\util\UUID;
 
 /**
@@ -82,8 +83,11 @@ class Handler {
     const XSD_FLOAT                   = 'http://www.w3.org/2001/XMLSchema#float';
     const XSD_DOUBLE                  = 'http://www.w3.org/2001/XMLSchema#double';
 
-    static private $repoResClasses;
-    static private $propertyRanges;
+    /**
+     *
+     * @var type \acdhOeaw\util\Ontology
+     */
+    static private $ontology;
     static private $solrMetaPropTmpl;
     static private $solrMetaPropMap;
 
@@ -124,10 +128,10 @@ class Handler {
         $d->log(" post transaction commit handler for " . $d->getTransactionId() . "...");
 
         self::updateCollectionExtent($parents, $d);
-	self::maintainAccessRights($modResources, $d);
-	if (!empty(RC::get('solrUrl', true) )) {
-            self::maintainSolr($modResources, $delUris, $d);
-	}
+        self::maintainAccessRights($modResources, $d);
+        if (!empty(RC::get('solrUrl', true))) {
+            self::FmaintainSolr($modResources, $delUris, $d);
+        }
 
         $d->log("  ...done");
     }
@@ -172,6 +176,7 @@ class Handler {
             $update = false;
             $update |= self::checkIdProp($res, [], $d);
             $update |= self::checkTitleProp($res, $d);
+            $update |= self::checkCardinalities($res, $d);
             $update |= self::maintainPid($res, $d);
             $update |= self::maintainHosting($res, $d);
             $update |= self::maintainAvailableDate($res, $d);
@@ -195,33 +200,8 @@ class Handler {
     }
 
     static private function loadOntology(Doorkeeper $d) {
-        if (self::$repoResClasses === null) {
-            $query                = "SELECT ?class where {?class (^?@ / ?@)+ ?@}";
-            $param                = [RC::idProp(), self::RDFS_SUBCLASS_PROP, RC::get('fedoraRepoObjectClass')];
-            $query                = new SimpleQuery($query, $param);
-            $results              = $d->getFedora()->runQuery($query);
-            self::$repoResClasses = [RC::get('fedoraRepoObjectClass')];
-            foreach ($results as $i) {
-                self::$repoResClasses[] = $i->class->getUri();
-            }
-        }
-        if (self::$propertyRanges === null) {
-            $query   = "
-                SELECT ?id ?type WHERE {
-                    ?prop ?@ ?type . 
-                    ?prop ?@ ?id .
-                    ?prop a ?@ .
-                }
-            ";
-            $param   = [self::RDFS_RANGE_PROP, RC::idProp(), self::OWL_DATATYPE_PROPERTY_CLASS];
-            $query   = new SimpleQuery($query, $param);
-            $results = $d->getFedora()->runQuery($query);
-            foreach ($results as $i) {
-                $uri = $i->type->getUri();
-                if (strpos($uri, self::XSD_NMSP) === 0) {
-                    self::$propertyRanges[$i->id->getUri()] = $uri;
-                }
-            }
+        if (self::$ontology === null) {
+            self::$ontology = new Ontology($d->getFedora(), RC::get('ontologyCacheFile'));
         }
     }
 
@@ -253,7 +233,7 @@ class Handler {
      * @param Doorkeeper $d
      * @throws LogicException
      */
-    static private function checkTitleProp(FedoraResource $res, Doorkeeper $d) {
+    static private function checkTitleProp(FedoraResource $res, Doorkeeper $d): bool {
         $searchProps = [
             'http://purl.org/dc/elements/1.1/title',
             'http://purl.org/dc/terms/title',
@@ -313,6 +293,36 @@ class Handler {
         $metadata->addLiteral($titleProp, $title);
         $res->setMetadata($metadata);
         return true;
+    }
+
+    /**
+     * Checks property cardinalities according to the ontology.
+     * 
+     * Here and now only min count is checked.
+     * @param FedoraResource $res
+     * @param Doorkeeper $d
+     * @return bool
+     */
+    static private function checkCardinalities(FedoraResource $res,
+                                               Doorkeeper $d): bool {
+        self::loadOntology($d);
+        
+        $meta = $res->getMetadata();
+        foreach ($res->getClasses() as $class) {
+            $classDef = self::$ontology->getClass($class);
+            if ($classDef === null) {
+                continue;
+            }
+            foreach ($classDef->properties as $p) {
+                if ($p->min > 0) {
+                    $count = count($meta->all($p->property));
+                    if ($count < $p->min) {
+                        throw new RuntimeException('Min property count for ' . $p->property . ' is ' . $p->min . ' but resource has ' . $count);
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -539,9 +549,11 @@ class Handler {
         $changes = false;
         $meta    = $res->getMetadata();
         foreach ($meta->propertyUris() as $prop) {
-            $range = self::$propertyRanges[$prop] ?? null;
+            $range = self::$ontology->getProperty($prop);
             if ($range === null) {
                 continue;
+            } else {
+                $range = $range->range;
             }
             foreach ($meta->allLiterals($prop) as $l) {
                 /* @var $l \EasyRdf\Literal */
@@ -615,7 +627,7 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$repoResClasses)) {
+        if (!self::resIsA($meta, self::$ontology->getRepoResClasses())) {
             return false;
         }
 
@@ -636,7 +648,7 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$repoResClasses)) {
+        if (!self::resIsA($meta, self::$ontology->getRepoResClasses())) {
             return false;
         }
 
@@ -656,7 +668,7 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$repoResClasses)) {
+        if (!self::resIsA($meta, self::$ontology->getRepoResClasses())) {
             return false;
         }
 
@@ -855,7 +867,7 @@ class Handler {
             /* @var $res \acdhOeaw\fedora\FedoraResource */
             $meta      = $res->getMetadata();
             $isBinary  = $res->isA(self::FEDORA_BINARY_CLASS);
-            $isRepoObj = self::resIsA($meta, self::$repoResClasses);
+            $isRepoObj = self::resIsA($meta, self::$ontology->getRepoResClasses());
             $isPublic  = ((string) $meta->getLiteral(RC::get('fedoraAccessRestrictionProp'))) === 'public';
             $validMime = in_array((string) $meta->getLiteral(self::FEDORA_MIME_TYPE_PROP), RC::get('solrIndexedMime'));
             $validSize = (int) ((string) $meta->getLiteral(self::FEDORA_EXTENT_PROP)) <= (int) RC::get('solrIndexedMaxSize');
@@ -917,7 +929,7 @@ class Handler {
 
             // metadata indexing
             if (self::solrMetaPropInit()) {
-                $body = self::$solrMetaPropTmpl;
+                $body       = self::$solrMetaPropTmpl;
                 $body['id'] = $res->getUri(true);
                 foreach (self::$solrMetaPropMap as $solrName => $propUri) {
                     foreach ($meta->all($propUri) as $prop) {
@@ -929,7 +941,7 @@ class Handler {
                 $req     = new Request('POST', $url, $headers, json_encode([$body]));
                 $client->send($req);
             }
-            
+
             $indexed = 1;
         } catch (RequestException $e) {
             $d->log('      failed');
