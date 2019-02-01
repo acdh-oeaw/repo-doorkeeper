@@ -700,7 +700,7 @@ class Handler {
             SELECT (sum(?colResSize) as ?size) (count(?res) as ?count) 
             WHERE {
                 {SELECT DISTINCT (?colRes AS ?res) WHERE { ?@ (?@ / ^?@)* ?colRes . }}
-                ?res ?@ ?colResSize .
+                OPTIONAL {?res ?@ ?colResSize .}
             }
         ");
         $param = ['', RC::idProp(), RC::relProp(), self::FEDORA_EXTENT_PROP];
