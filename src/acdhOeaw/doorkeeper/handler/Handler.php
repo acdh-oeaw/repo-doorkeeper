@@ -130,7 +130,7 @@ class Handler {
         self::updateCollectionExtent($parents, $d);
         self::maintainAccessRights($modResources, $d);
         if (!empty(RC::get('solrUrl', true))) {
-            self::FmaintainSolr($modResources, $delUris, $d);
+            self::maintainSolr($modResources, $delUris, $d);
         }
 
         $d->log("  ...done");
@@ -627,7 +627,7 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$ontology->getRepoResClasses())) {
+        if (!self::resIsA($meta, self::$ontology->getRepoObjectClasses())) {
             return false;
         }
 
@@ -648,7 +648,7 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$ontology->getRepoResClasses())) {
+        if (!self::resIsA($meta, self::$ontology->getRepoObjectClasses())) {
             return false;
         }
 
@@ -668,7 +668,7 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$ontology->getRepoResClasses())) {
+        if (!self::resIsA($meta, self::$ontology->getRepoObjectClasses())) {
             return false;
         }
 
