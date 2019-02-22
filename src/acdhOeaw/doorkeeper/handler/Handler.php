@@ -867,7 +867,7 @@ class Handler {
             /* @var $res \acdhOeaw\fedora\FedoraResource */
             $meta      = $res->getMetadata();
             $isBinary  = $res->isA(self::FEDORA_BINARY_CLASS);
-            $isRepoObj = self::resIsA($meta, self::$ontology->getRepoResClasses());
+            $isRepoObj = self::resIsA($meta, self::$ontology->getRepoObjectClasses());
             $isPublic  = ((string) $meta->getLiteral(RC::get('fedoraAccessRestrictionProp'))) === 'public';
             $validMime = in_array((string) $meta->getLiteral(self::FEDORA_MIME_TYPE_PROP), RC::get('solrIndexedMime'));
             $validSize = (int) ((string) $meta->getLiteral(self::FEDORA_EXTENT_PROP)) <= (int) RC::get('solrIndexedMaxSize');

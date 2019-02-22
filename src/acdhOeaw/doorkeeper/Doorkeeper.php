@@ -365,7 +365,7 @@ class Doorkeeper {
             foreach ($this->preCommitHandlers as $i) {
                 try {
                     $i($resources, $deletedUris, $this);
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $errors[] = $e;
                 }
             }
@@ -389,7 +389,7 @@ class Doorkeeper {
                 foreach ($this->postCommitHandlers as $i) {
                     try {
                         $i($resources, $deletedUris, $parents, $this);
-                    } catch (Exception $e) {
+                    } catch (Throwable $e) {
                         $errors[] = $e;
                     }
                 }
@@ -403,7 +403,7 @@ class Doorkeeper {
             $rollbackUrl = $this->proxyBaseUrl . 'rest/' . $this->transactionId . 'fcr:tx/fcr:rollback';
             try {
                 $this->sendRequest('POST', $rollbackUrl);
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
 
             }
             $this->removeTransactionFromDb();
@@ -415,7 +415,7 @@ class Doorkeeper {
     private function handleTransactionExtend() {
         try {
             $response = $this->proxy->proxy($this->proxyUrl);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             
         }
         
