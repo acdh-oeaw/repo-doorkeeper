@@ -179,7 +179,6 @@ class Handler {
             $update = false;
             $update |= self::checkIdProp($res, [], $d);
             $update |= self::checkTitleProp($res, $d);
-            $update |= self::checkCardinalities($res, $d);
             $update |= self::maintainPid($res, $d);
             $update |= self::maintainHosting($res, $d);
             $update |= self::maintainAvailableDate($res, $d);
@@ -187,6 +186,7 @@ class Handler {
             $update |= self::maintainFormat($res, $d);
             $update |= self::maintainAccessRestriction($res, $d);
             $update |= self::maintainPropertyRange($res, $d);
+            $update |= self::checkCardinalities($res, $d);
 
             if ($update) {
                 $d->log('  updating resource after checks');
