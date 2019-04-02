@@ -104,7 +104,7 @@ class Doorkeeper {
         Auth::init($pdo);
 
         $this->id     = rand();
-        $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD');
+        $this->method = strtoupper(filter_input(INPUT_SERVER, 'REQUEST_METHOD'));
         $this->proxy  = new Proxy($this);
         $this->fedora = new Fedora();
         $this->pdo    = $pdo;

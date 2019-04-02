@@ -168,6 +168,9 @@ class Handler {
      * @throws \LogicException
      */
     static public function checkEdit(FedoraResource $res, Doorkeeper $d) {
+        if ($d->getMethod() === "DELETE") {
+            return;
+        }
         $d->log(' post edit handler for: ' . $d->getMethod() . ' ' . $res->getUri());
 
         try {
