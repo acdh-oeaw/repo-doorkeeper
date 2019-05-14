@@ -62,7 +62,7 @@ $doorkeeper->registerRoute(new RouteBlazegraph('/blazegraph', 'http://blazegraph
 $doorkeeper->registerRoute(new Route('/browser', 'http://drupal/browser', array(), false));
 $doorkeeper->registerRoute(new Route('/oai', 'http://oai', array(), false));
 $doorkeeper->registerRoute(new Route('/solr', 'http://solr:8983/solr', array(), false));
-$doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.apollo.arz.oeaw.ac.at/services/cmdi2html', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
+$doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.apollo.arz.oeaw.ac.at/services/cmdi2html/', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $doorkeeper->registerRoute(new Route('/services/oxgarage', 'https://arche-oxgarage.apollo.arz.oeaw.ac.at', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $doorkeeper->registerRoute(new Route('/services/thumbnails', 'https://arche-thumbnails.apollo.arz.oeaw.ac.at', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $host = filter_input(INPUT_SERVER, 'HTTP_X_FORWARDED_HOST');
