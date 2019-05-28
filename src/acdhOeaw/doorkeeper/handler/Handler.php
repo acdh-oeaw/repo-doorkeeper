@@ -177,8 +177,6 @@ class Handler {
             $res->getMetadata();
 
             $update = false;
-            $update |= self::checkIdProp($res, [], $d);
-            $update |= self::checkTitleProp($res, $d);
             $update |= self::maintainPid($res, $d);
             $update |= self::maintainHosting($res, $d);
             $update |= self::maintainAvailableDate($res, $d);
@@ -187,6 +185,8 @@ class Handler {
             $update |= self::maintainAccessRestriction($res, $d);
             $update |= self::maintainPropertyRange($res, $d);
             $update |= self::checkCardinalities($res, $d);
+            $update |= self::checkIdProp($res, [], $d);
+            $update |= self::checkTitleProp($res, $d);
 
             if ($update) {
                 $d->log('  updating resource after checks');
@@ -352,7 +352,6 @@ class Handler {
     static private function checkIdProp(FedoraResource $res, array $txRes,
                                         Doorkeeper $d): bool {
         $prop         = RC::idProp();
-        $pidProp      = RC::get('epicPidProp');
         $namespace    = RC::idNmsp();
         $ontologyPart = $d->isOntologyPart($res->getUri());
         $metadata     = $res->getMetadata();
@@ -362,7 +361,7 @@ class Handler {
             throw new LogicException("fedoraIdProp is a literal");
         }
 
-        $ids         = array_merge($metadata->allResources($prop), $metadata->allResources($pidProp));
+        $ids         = $metadata->allResources($prop);
         $acdhIdCount = 0;
         foreach ($ids as $id) {
             $id = $id->getUri();
@@ -435,6 +434,7 @@ class Handler {
     static private function maintainPid(FedoraResource $res, Doorkeeper $d): bool {
         $pidProp = RC::get('epicPidProp');
 
+        $ret = false;
         $metadata = $res->getMetadata();
         if ($metadata->getLiteral($pidProp) !== null) {
             if (RC::get('epicPswd') === '') {
@@ -451,11 +451,24 @@ class Handler {
             $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
 
             $metadata->addResource($pidProp, $pid);
-            $res->setMetadata($metadata);
-            return true;
+            $ret = true;
         }
 
-        return false;
+        // promote PIDs to IDs
+        $ids = $res->getIds();
+        foreach ($metadata->allResources($pidProp) as $i) {
+            $i = (string) $i;
+            if (!in_array($i, $ids)) {
+                $metadata->addResource(RC::idProp(), $i);
+                $ret = true;
+            }
+        }
+
+        if ($ret) {
+            $res->setMetadata($metadata);
+        }
+
+        return $ret;
     }
 
     static private function checkIdRef(FedoraResource $res, array $txRes,
