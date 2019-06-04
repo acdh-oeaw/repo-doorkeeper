@@ -555,10 +555,11 @@ class Doorkeeper {
      * Updates the global repo modification time triple
      */
     private function updateModTime() {
-$this->log('aaaaaaaa');
+        $modProp = RC::get('doorkeeperModTimeProp');
         $res = $this->getTechResource();
         $meta  = $res->getMetadata();
-        $meta->addLiteral(RC::get('doorkeeperModTimeProp'), new DateTime());
+        $meta->delete($modProp);
+        $meta->addLiteral($modProp, new DateTime());
         $res->setMetadata($meta);
         $res->updateMetadata();
     }
