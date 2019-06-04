@@ -409,7 +409,7 @@ class Doorkeeper {
 
             }
             $this->removeTransactionFromDb();
-        } else {
+        } else if (count($resources) + count($deletedUris) > 0) {
             $this->updateModTime();
         }
         $this->reportErrors($errors);
