@@ -26,6 +26,7 @@
 
 namespace acdhOeaw\doorkeeper;
 
+use DateTime;
 use PDO;
 use Exception;
 use Throwable;
@@ -39,6 +40,7 @@ use GuzzleHttp\Exception\RequestException;
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\doorkeeper\Proxy;
 use acdhOeaw\fedora\Fedora;
+use acdhOeaw\fedora\FedoraResource;
 use acdhOeaw\fedora\exceptions\Deleted;
 use acdhOeaw\fedora\exceptions\NoAcdhId;
 use acdhOeaw\fedora\exceptions\NotFound;
@@ -407,6 +409,8 @@ class Doorkeeper {
 
             }
             $this->removeTransactionFromDb();
+        } else {
+            $this->updateModTime();
         }
         $this->reportErrors($errors);
         $this->log('  Transaction ended');
@@ -533,6 +537,33 @@ class Doorkeeper {
     }
 
     /**
+     * Returns the doorkeeper's technical resource used for stuff like 
+     * a triplestore sync or global modification date.
+     */
+    private function getTechResource(): FedoraResource {
+        try {
+            $res = $this->fedora->getResourceByUri(RC::get('doorkeeperSyncRes'));
+        } catch (NotFound $e) {
+            $meta = (new Graph())->resource('.');
+            $meta->addLiteral(RC::titleProp(), 'Technical resource used by the doorkeeper');
+            $res  = $this->fedora->createResource($meta, '', RC::get('doorkeeperSyncRes'), 'PUT');
+        }
+        return $res;
+    }
+
+    /**
+     * Updates the global repo modification time triple
+     */
+    private function updateModTime() {
+$this->log('aaaaaaaa');
+        $res = $this->getTechResource();
+        $meta  = $res->getMetadata();
+        $meta->addLiteral(RC::get('doorkeeperModTimeProp'), new DateTime());
+        $res->setMetadata($meta);
+        $res->updateMetadata();
+    }
+
+    /**
      * Assures that the triplestore is synchronized after the transaction commit.
      * 
      * It is done by updating a known resource and then periodicaly checking the
@@ -546,13 +577,7 @@ class Doorkeeper {
         $t        = time();
         $syncProp = RC::get('doorkeeperSyncProp');
 
-        try {
-            $res = $this->fedora->getResourceByUri(RC::get('doorkeeperSyncRes'));
-        } catch (NotFound $e) {
-            $meta = (new Graph())->resource('.');
-            $meta->addLiteral(RC::titleProp(), 'Technical resource used by the doorkeeper');
-            $res  = $this->fedora->createResource($meta, '', RC::get('doorkeeperSyncRes'), 'PUT');
-        }
+        $res = $this->getTechResource();
         $meta  = $res->getMetadata();
         $value = $meta->getLiteral($syncProp);
         $value = ($value === null ? 0 : $value->getValue()) + 1;
