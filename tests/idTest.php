@@ -18,7 +18,7 @@ $idProp = RC::idProp();
 $idNmsp = RC::idNmsp();
 $meta = (new Graph())->resource('.');
 $meta->addLiteral(RC::titleProp(), 'test resource');
-
+/*
 ##########
 echo "id is assigned automatically\n";
 $fedora->begin();
@@ -217,7 +217,7 @@ try {
         throw $e;
     }
 }
-
+*/
 ##########
 echo "geonames id are being checked\n";
 $fedora->begin();
@@ -228,22 +228,22 @@ try {
     throw new Exception('no error');
 } catch (ClientException $e) {
     $resp = $e->getResponse();
-    if ($resp->getStatusCode() != 400 || !preg_match('|a geonames id URI has to use the https protocol|', $resp->getBody())) {
-        throw $e;
-    }   
-}
-$meta1 = $meta->copy();
-$meta1->addResource($idProp, 'https://www.geonames.org/2761367');
-try {
-    $res1 = $fedora->createResource($meta1);
-    throw new Exception('no error');
-} catch (ClientException $e) {
-    $resp = $e->getResponse();
-    if ($resp->getStatusCode() != 400 || !preg_match('|a geonames id URI has to return the HTTP 200 code|', $resp->getBody())) {
+    if ($resp->getStatusCode() != 400 || !preg_match('|a geonames id URI has to match|', $resp->getBody())) {
         throw $e;
     }   
 }
 $meta1 = $meta->copy();
 $meta1->addResource($idProp, 'https://www.geonames.org/2761367/wien.html');
+try {
+    $res1 = $fedora->createResource($meta1);
+    throw new Exception('no error');
+} catch (ClientException $e) {
+    $resp = $e->getResponse();
+    if ($resp->getStatusCode() != 400 || !preg_match('|a geonames id URI has to match|', $resp->getBody())) {
+        throw $e;
+    }   
+}
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'https://www.geonames.org/2761367');
 $res1 = $fedora->createResource($meta1);
 $fedora->rollback();

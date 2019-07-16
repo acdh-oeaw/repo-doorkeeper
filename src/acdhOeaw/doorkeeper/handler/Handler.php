@@ -433,23 +433,12 @@ class Handler {
     }
 
     static private function checkGeonameIds(FedoraResource $res, Doorkeeper $d): bool {
-        $geonamesIdNmsp = RC::get('doorkeeperGeonamesIdNmsp');
+        $nmspAll = RC::get('doorkeeperGeonamesIdNmspAll');
+        $nmspValid = RC::get('doorkeeperGeonamesIdNmspValid');
         foreach ($res->getMetadata()->allResources(RC::idProp()) as $id) {
             $id = (string) $id;
-            if (!preg_match($geonamesIdNmsp, $id)) {
-                continue;
-            }
-            if (substr($id, 0, 5) !== 'https') {
-                throw new LogicException('a geonames id URI has to use the https protocol');
-            }
-            $client   = new Client([
-                'verify'          => false,
-                'allow_redirects' => false
-            ]);
-            $request  = new Request('HEAD', $id);
-            $response = $client->send($request);
-            if ($response->getStatusCode() != 200) {
-                throw new LogicException('a geonames id URI has to return the HTTP 200 code but ' . $response->getStatusCode() . ' has been returned');
+            if (preg_match($nmspAll, $id) && !preg_match($nmspValid, $id)) {
+                throw new LogicException('a geonames id URI has to match the ' . $nmspValid . ' regex');
             }
         }
         return false;
