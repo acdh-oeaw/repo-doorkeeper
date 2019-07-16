@@ -727,7 +727,7 @@ class Handler {
         $query = new SimpleQuery("
             SELECT (sum(?colResSize) as ?size) (count(?res) as ?count) 
             WHERE {
-                {SELECT DISTINCT (?colRes AS ?res) WHERE { ?@ (?@ / ^?@)* ?colRes . }}
+                {SELECT DISTINCT (?colRes AS ?res) WHERE { ?@ (?@ / ^?@)+ ?colRes . }}
                 OPTIONAL {?res ?@ ?colResSize .}
             }
         ");
