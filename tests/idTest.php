@@ -218,4 +218,32 @@ try {
     }
 }
 
-
+##########
+echo "geonames id are being checked\n";
+$fedora->begin();
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'http://www.geonames.org/2761367/wien.html');
+try {
+    $res1 = $fedora->createResource($meta1);
+    throw new Exception('no error');
+} catch (ClientException $e) {
+    $resp = $e->getResponse();
+    if ($resp->getStatusCode() != 400 || !preg_match('|a geonames id URI has to use the https protocol|', $resp->getBody())) {
+        throw $e;
+    }   
+}
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'https://www.geonames.org/2761367');
+try {
+    $res1 = $fedora->createResource($meta1);
+    throw new Exception('no error');
+} catch (ClientException $e) {
+    $resp = $e->getResponse();
+    if ($resp->getStatusCode() != 400 || !preg_match('|a geonames id URI has to return the HTTP 200 code|', $resp->getBody())) {
+        throw $e;
+    }   
+}
+$meta1 = $meta->copy();
+$meta1->addResource($idProp, 'https://www.geonames.org/2761367/wien.html');
+$res1 = $fedora->createResource($meta1);
+$fedora->rollback();

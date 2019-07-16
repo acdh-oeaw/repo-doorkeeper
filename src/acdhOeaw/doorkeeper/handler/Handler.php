@@ -184,6 +184,7 @@ class Handler {
             $update |= self::maintainFormat($res, $d);
             $update |= self::maintainAccessRestriction($res, $d);
             $update |= self::maintainPropertyRange($res, $d);
+            $update |= self::checkGeonameIds($res, $d);
             $update |= self::checkCardinalities($res, $d);
             $update |= self::checkIdProp($res, [], $d);
             $update |= self::checkTitleProp($res, $d);
@@ -309,7 +310,7 @@ class Handler {
     static private function checkCardinalities(FedoraResource $res,
                                                Doorkeeper $d): bool {
         self::loadOntology($d);
-        
+
         $meta = $res->getMetadata();
         foreach ($res->getClasses() as $class) {
             $classDef = self::$ontology->getClass($class);
@@ -431,10 +432,33 @@ class Handler {
         return $update;
     }
 
+    static private function checkGeonameIds(FedoraResource $res, Doorkeeper $d): bool {
+        $geonamesIdNmsp = RC::get('doorkeeperGeonamesIdNmsp');
+        foreach ($res->getMetadata()->allResources(RC::idProp()) as $id) {
+            $id = (string) $id;
+            if (!preg_match($geonamesIdNmsp, $id)) {
+                continue;
+            }
+            if (substr($id, 0, 5) !== 'https') {
+                throw new LogicException('a geonames id URI has to use the https protocol');
+            }
+            $client   = new Client([
+                'verify'          => false,
+                'allow_redirects' => false
+            ]);
+            $request  = new Request('HEAD', $id);
+            $response = $client->send($request);
+            if ($response->getStatusCode() != 200) {
+                throw new LogicException('a geonames id URI has to return the HTTP 200 code but ' . $response->getStatusCode() . ' has been returned');
+            }
+        }
+        return false;
+    }
+
     static private function maintainPid(FedoraResource $res, Doorkeeper $d): bool {
         $pidProp = RC::get('epicPidProp');
 
-        $ret = false;
+        $ret      = false;
         $metadata = $res->getMetadata();
         if ($metadata->getLiteral($pidProp) !== null) {
             if (RC::get('epicPswd') === '') {
