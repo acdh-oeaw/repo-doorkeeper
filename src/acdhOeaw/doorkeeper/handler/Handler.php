@@ -704,13 +704,17 @@ class Handler {
         $prop      = RC::get('fedoraAccessRestrictionProp');
         $resources = $meta->allResources($prop);
         $literals  = $meta->allLiterals($prop);
-        $allowed   = ['public', 'academic', 'restricted'];
-        $condCount = count($literals) == 0 || count($resources) > 0 || count($literals) > 1;
-        $condValue = count($literals) > 0 && !in_array($literals[0]->getValue(), $allowed);
+        $allowed   = [
+            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/public', 
+            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/academic', 
+            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/restricted'
+        ];
+        $condCount = count($resources) == 0 || count($literals) > 0 || count($resources) > 1;
+        $condValue = count($resources) > 0 && !in_array((string) $resources[0], $allowed);
         if ($condCount || $condValue) {
             $default = RC::get('doorkeeperAccessRestrictionDefault');
             $meta->delete($prop);
-            $meta->addLiteral($prop, $default);
+            $meta->addResource($prop, $default);
             $res->setMetadata($meta);
             $d->log('  ' . $prop . ' = ' . $default . ' added');
             return true;
@@ -803,7 +807,7 @@ class Handler {
         foreach ($resources as $n => $res) {
             /* @var $res \acdhOeaw\fedora\FedoraResource */
             $meta        = $res->getMetadata();
-            $accessRestr = (string) $meta->getLiteral(RC::get('fedoraAccessRestrictionProp'));
+            $accessRestr = (string) $meta->getResource(RC::get('fedoraAccessRestrictionProp'));
             if ($accessRestr === '') {
                 continue;
             }
@@ -815,12 +819,12 @@ class Handler {
             $acl->setAutosave(false);
             $acl->revoke(WAR::USER, WAR::PUBLIC_USER, WAR::WRITE);
 
-            if ($accessRestr === 'public') {
+            if ($accessRestr === 'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/public') {
                 $acl->grant(WAR::USER, WAR::PUBLIC_USER, WAR::READ);
                 $d->log('    public');
             } else {
                 $acl->revoke(WAR::USER, WAR::PUBLIC_USER, WAR::READ);
-                if ($accessRestr === 'academic') {
+                if ($accessRestr === 'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/academic') {
                     $acl->grant(WAR::USER, RC::get('academicGroup'), WAR::READ);
                     $d->log('    academic');
                 } else {
