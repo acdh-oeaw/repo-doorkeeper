@@ -205,7 +205,7 @@ class Handler {
 
     static private function loadOntology(Doorkeeper $d) {
         if (self::$ontology === null) {
-            self::$ontology = new Ontology($d->getFedora(), RC::get('ontologyCacheFile'));
+            self::$ontology = new Ontology($d->getFedora());
         }
     }
 
@@ -697,7 +697,10 @@ class Handler {
         self::loadOntology($d);
         $meta = $res->getMetadata();
 
-        if (!self::resIsA($meta, self::$ontology->getRepoObjectClasses())) {
+        $repoObjC   = self::$ontology->getRepoObjectClasses();
+        $sharedObjC = self::$ontology->getSharedObjectClasses();
+        $containerC = self::$ontology->getContainerClasses();
+        if (!self::resIsA($meta, $repoObjC) && !self::resIsA($meta, $sharedObjC) && !self::resIsA($meta, $containerC)) {
             return false;
         }
 
