@@ -43,6 +43,7 @@ try {
         $fedora->commit();
     }
 }
+exit();
 
 echo "Academic access restriction is properly granted\n";
 try {

@@ -449,7 +449,7 @@ class Handler {
 
         $ret      = false;
         $metadata = $res->getMetadata();
-        if ($metadata->getLiteral($pidProp) !== null) {
+        if ($metadata->getLiteral($pidProp) !== null && $metadata->getResource($pidProp) === null) {
             if (RC::get('epicPswd') === '') {
                 $d->log('  skipping PID generation - no EPIC password provided');
                 return false;
