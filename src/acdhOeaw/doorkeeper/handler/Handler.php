@@ -456,23 +456,37 @@ class Handler {
     static private function maintainPid(FedoraResource $res, Doorkeeper $d): bool {
         $pidProp = RC::get('epicPidProp');
 
+        $curPid = null;
+        foreach ($res->getIds() as $i) {
+            if (strpos((string) $i, RC::get('epicResolver')) === 0) {
+                $curPid = (string) $i;
+                break;
+            }
+        }
+
         $ret      = false;
         $metadata = $res->getMetadata();
-        if ($metadata->getLiteral($pidProp) !== null && $metadata->getResource($pidProp) === null) {
-            if (RC::get('epicPswd') === '') {
-                $d->log('  skipping PID generation - no EPIC password provided');
-                return false;
+        if ($metadata->getLiteral($pidProp)) {
+            if ($curPid === null) {
+                if (RC::get('epicPswd') === '') {
+                    $d->log('  skipping PID generation - no EPIC password provided');
+                    return false;
+                }
+
+                $metadata->delete($pidProp);
+
+                $uri = $res->getId();
+                $ps  = new HandleService(RC::get('epicUrl'), RC::get('epicPrefix'), RC::get('epicUser'), RC::get('epicPswd'));
+                $pid = $ps->create($uri);
+                $pid = str_replace(RC::get('epicUrl'), RC::get('epicResolver'), $pid);
+                $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
+
+                $metadata->addResource($pidProp, $pid);
+            } else {
+                $metadata->delete($pidProp);
+                $metadata->addResource($pidProp, $curPid);
+                $d->log('  recreating PID ' . $curPid . ' pointing to ' . $uri);
             }
-
-            $metadata->delete($pidProp);
-
-            $uri = $res->getId();
-            $ps  = new HandleService(RC::get('epicUrl'), RC::get('epicPrefix'), RC::get('epicUser'), RC::get('epicPswd'));
-            $pid = $ps->create($uri);
-            $pid = str_replace(RC::get('epicUrl'), RC::get('epicResolver'), $pid);
-            $d->log('  registered PID ' . $pid . ' pointing to ' . $uri);
-
-            $metadata->addResource($pidProp, $pid);
             $ret = true;
         }
 
