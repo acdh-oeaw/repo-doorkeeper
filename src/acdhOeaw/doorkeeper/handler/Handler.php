@@ -52,6 +52,7 @@ use acdhOeaw\fedora\metadataQuery\SimpleQuery;
 use acdhOeaw\epicHandle\HandleService;
 use acdhOeaw\util\RepoConfig as RC;
 use acdhOeaw\util\Ontology;
+use acdhOeaw\util\UriNorm;
 use zozlak\util\UUID;
 
 /**
@@ -184,7 +185,7 @@ class Handler {
             $update |= self::maintainFormat($res, $d);
             $update |= self::maintainAccessRestriction($res, $d);
             $update |= self::maintainPropertyRange($res, $d);
-            $update |= self::checkGeonameIds($res, $d);
+            $update |= self::maintainIdNorm($res, $d);
             $update |= self::checkCardinalities($res, $d);
             $update |= self::checkIdProp($res, [], $d);
             $update |= self::checkTitleProp($res, $d);
@@ -432,16 +433,24 @@ class Handler {
         return $update;
     }
 
-    static private function checkGeonameIds(FedoraResource $res, Doorkeeper $d): bool {
-        $nmspAll = RC::get('doorkeeperGeonamesIdNmspAll');
-        $nmspValid = RC::get('doorkeeperGeonamesIdNmspValid');
-        foreach ($res->getMetadata()->allResources(RC::idProp()) as $id) {
-            $id = (string) $id;
-            if (preg_match($nmspAll, $id) && !preg_match($nmspValid, $id)) {
-                throw new LogicException('a geonames id URI has to match the ' . $nmspValid . ' regex');
+    static private function maintainIdNorm(FedoraResource $res, Doorkeeper $d): bool {
+        $idProp = RC::idProp();
+        $update = false;
+        $metadata = $res->getMetadata();
+        foreach ($metadata->allResources($idProp) as $id) {
+            $ids = (string) $id;
+            $std = UriNorm::standardize($id);
+            if ($std !== $id) {
+                $metadata->delete($idProp, $ids);
+                $metadata->addResource($idProp, $std);
+                $update = true;
+                $d->log("  id URI $ids standardized to $std");
             }
         }
-        return false;
+        if ($update) {
+            $res->setMetadata($metadata);
+        }
+        return $update;
     }
 
     static private function maintainPid(FedoraResource $res, Doorkeeper $d): bool {
