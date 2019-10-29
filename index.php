@@ -65,6 +65,7 @@ $doorkeeper->registerRoute(new Route('/solr', 'http://solr:8983/solr', array(), 
 $doorkeeper->registerRoute(new Route('/services/cmdi2hml', 'https://cmdi2html.apollo.arz.oeaw.ac.at/services/cmdi2html/', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $doorkeeper->registerRoute(new Route('/services/oxgarage', 'https://arche-oxgarage.apollo.arz.oeaw.ac.at', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $doorkeeper->registerRoute(new Route('/services/thumbnails', 'https://arche-thumbnails.apollo.arz.oeaw.ac.at', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
+$doorkeeper->registerRoute(new Route('/services/customTEI2HTML', 'https://phpsaxon.apollo.arz.oeaw.ac.at', array(), false, new ProxyOptions(array('preserveHost' => false, 'authHeaders' => false))));
 $host = filter_input(INPUT_SERVER, 'HTTP_X_FORWARDED_HOST');
 $host = $host ? $host : filter_input(INPUT_SERVER, 'HTTP_HOST');
 $host = explode(',', $host);
