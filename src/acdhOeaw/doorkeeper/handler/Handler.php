@@ -189,6 +189,7 @@ class Handler {
             $update |= self::checkCardinalities($res, $d);
             $update |= self::checkIdProp($res, [], $d);
             $update |= self::checkTitleProp($res, $d);
+            $update |= self::checkLanguage($res, $d);
 
             if ($update) {
                 $d->log('  updating resource after checks');
@@ -239,65 +240,98 @@ class Handler {
      * @throws LogicException
      */
     static private function checkTitleProp(FedoraResource $res, Doorkeeper $d): bool {
-        $searchProps = [
-            'http://purl.org/dc/elements/1.1/title',
-            'http://purl.org/dc/terms/title',
-            'http://www.w3.org/2004/02/skos/core#prefLabel',
-            'http://www.w3.org/2000/01/rdf-schema#label',
-            'http://xmlns.com/foaf/0.1/name',
-        ];
-        $titleProp   = RC::titleProp();
+        $titleProp = RC::titleProp();
+        $meta      = $res->getMetadata();
 
-        $metadata = $res->getMetadata();
-
-        // special case acdh:hasFirstName and acdh:hasLastName
-        $first = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/schema#hasFirstName');
-        $last  = $metadata->getLiteral('https://vocabs.acdh.oeaw.ac.at/schema#hasLastName');
-        $title = trim((string) $first . ' ' . (string) $last);
-
-        $titles = $metadata->allLiterals($titleProp);
+        // check existing titles
+        $titles = $meta->allLiterals($titleProp);
         $langs  = [];
         foreach ($titles as $i) {
             $lang = $i->getLang();
             if (isset($langs[$lang])) {
-                throw new LogicException("more than one fedoraTitleProp");
+                throw new LogicException("more than one $titleProp property");
             }
             if ((string) $i === '') {
-                throw new LogicException("fedoraTitleProp value is empty");
+                throw new LogicException("$titleProp value is empty");
             }
             $langs[$lang] = '';
         }
-        if (count($titles) > 0 && ($title === '' || (string) $titles[0] === $title)) {
+        if (count($titles) > 0) {
             return false;
         }
 
-        if ($title === '') {
-            // no direct hit - search for candidates
-            foreach ($searchProps as $prop) {
-                $matches = $metadata->allLiterals($prop);
-                if (count($matches) > 0 && trim($matches[0]) !== '') {
-                    $title = trim((string) $matches[0]);
+        // try to create a title if it's missing
+        $searchProps = [
+            [
+                'https://vocabs.acdh.oeaw.ac.at/schema#hasFirstName',
+                'https://vocabs.acdh.oeaw.ac.at/schema#hasLastName',
+            ],
+            [
+                'http://xmlns.com/foaf/0.1/givenName',
+                'http://xmlns.com/foaf/0.1/familyName',
+            ],
+            ['http://purl.org/dc/elements/1.1/title'],
+            ['http://purl.org/dc/terms/title'],
+            ['http://www.w3.org/2004/02/skos/core#prefLabel'],
+            ['http://www.w3.org/2000/01/rdf-schema#label'],
+            ['http://xmlns.com/foaf/0.1/name'],
+        ];
+        $langs       = [];
+        foreach ($searchProps as $parts) {
+            foreach ($parts as $prop) {
+                foreach ($meta->allLiterals($prop) as $value) {
+                    $lang         = $value->getLang();
+                    $langs[$lang] = ($langs[$lang] ?? '') . ' ' . (string) $value;
                 }
             }
         }
 
-        // special case - foaf:givenName and foaf:familyName
-        if ($title === '') {
-            $given  = $metadata->getLiteral('http://xmlns.com/foaf/0.1/givenName');
-            $family = $metadata->getLiteral('http://xmlns.com/foaf/0.1/familyName');
-            $title  = trim((string) $given . ' ' . (string) $family);
+        $count = 0;
+        foreach ($langs as $lang => $title) {
+            $title = trim($title);
+            if (!empty($title)) {
+                $d->log("\t\tsetting title to $title");
+                $meta->addLiteral($titleProp, $title, $lang);
+                $count++;
+            }
         }
-
-        if ($title === '') {
-            throw new LogicException("fedoraTitleProp is missing");
+        if ($count === 0) {
+            throw new LogicException("$titleProp is missing");
         }
-
-        // if we are here, the title has to be updated
-        $d->log('    setting title to ' . $title);
-        $metadata->delete($titleProp);
-        $metadata->addLiteral($titleProp, $title);
-        $res->setMetadata($metadata);
+        $res->setMetadata($meta);
         return true;
+    }
+
+    static private function checkLanguage(FedoraResource $res, Doorkeeper $d): bool {
+        $meta    = $res->getMetadata();
+        $toCheck = [
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasTitle',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasAlternativeTitle',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasDescription',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasTechnicalInfo',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasAppliedMethodDescription',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasExtent',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasArrangement',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasNamingScheme',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasCompleteness',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasEditorialPractice',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasSeriesInformation',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasTableOfContents',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasNote',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasTemporalCoverage',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasCity',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasCountry',
+            'https://vocabs.acdh.oeaw.ac.at/schema#hasRegion',
+        ];
+        foreach ($toCheck as $prop) {
+            foreach ($meta->allLiterals($prop) as $value) {
+                /* @var $value \EasyRdf\Literal */
+                if (empty($value->getLang())) {
+                    throw new LogicException("Property $prop with value " . (string) $value . " is not tagged with a language");
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -434,8 +468,8 @@ class Handler {
     }
 
     static private function maintainIdNorm(FedoraResource $res, Doorkeeper $d): bool {
-        $idProp = RC::idProp();
-        $update = false;
+        $idProp   = RC::idProp();
+        $update   = false;
         $metadata = $res->getMetadata();
         foreach ($metadata->allResources($idProp) as $id) {
             $ids = (string) $id;
@@ -731,8 +765,8 @@ class Handler {
         $resources = $meta->allResources($prop);
         $literals  = $meta->allLiterals($prop);
         $allowed   = [
-            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/public', 
-            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/academic', 
+            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/public',
+            'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/academic',
             'https://vocabs.acdh.oeaw.ac.at/archeaccessrestrictions/restricted'
         ];
         $condCount = count($resources) == 0 || count($literals) > 0 || count($resources) > 1;
