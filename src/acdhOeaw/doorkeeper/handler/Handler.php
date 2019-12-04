@@ -303,6 +303,10 @@ class Handler {
     }
 
     static private function checkLanguage(FedoraResource $res, Doorkeeper $d): bool {
+        if (strpos($res->getUri(true), RC::get('fedoraAclUri')) === 0) {
+            return false;
+        }
+
         $meta    = $res->getMetadata();
         $toCheck = [
             'https://vocabs.acdh.oeaw.ac.at/schema#hasTitle',
