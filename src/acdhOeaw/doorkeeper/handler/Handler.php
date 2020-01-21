@@ -251,10 +251,10 @@ class Handler {
             if (isset($langs[$lang])) {
                 throw new LogicException("more than one $titleProp property");
             }
-            if ((string) $i === '') {
+            if (empty((string) $i)) {
                 throw new LogicException("$titleProp value is empty");
             }
-            $langs[$lang] = '';
+            $langs[$lang] = (string) $i;
         }
         if (count($titles) > 0) {
             return false;
